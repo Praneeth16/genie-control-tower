@@ -121,7 +121,14 @@ export interface Health {
   data_is_synthetic: boolean;
   require_obo: boolean;
   turn_budget_seconds: number;
-  genie_quota: { used_in_window: number; capacity: number; window_seconds: number };
+  /** `used_in_window` is occupancy of a rolling window and returns to zero as messages age out, so
+   *  `sent_total` is what shows a question actually spent quota. */
+  genie_quota: {
+    used_in_window: number;
+    capacity: number;
+    window_seconds: number;
+    sent_total: number;
+  };
 }
 
 export interface ScopeTable {

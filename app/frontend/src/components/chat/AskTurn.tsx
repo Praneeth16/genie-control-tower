@@ -24,6 +24,7 @@ import {
 import { api, AskResult, Guardrail } from "../../api";
 import { DomainBadge, DOMAIN_LABEL, ErrorText, fmtIST, RowTable, SectionTitle, ViaBadge } from "../kit";
 import { GuardrailVerdict } from "../Guardrails";
+import { Markdown } from "../Markdown";
 
 function LegCard({ leg }: { leg: AskResult["legs"][number] }) {
   return (
@@ -52,8 +53,11 @@ function LegCard({ leg }: { leg: AskResult["legs"][number] }) {
             {leg.narrative_defect}
           </div>
         )}
+        {/* Genie writes Markdown in its narrative, e.g. "fell from **13.1%** to **10.6%**". Rendered as
+            plain text the asterisks were on screen in front of the customer, and the emphasis is on the
+            figures a banker reads first. */}
         {leg.description && (
-          <p className="text-xs leading-relaxed text-foreground/80">{leg.description}</p>
+          <Markdown text={leg.description} className="text-xs leading-relaxed text-foreground/80" />
         )}
 
         {leg.sql && (
@@ -236,15 +240,16 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
               {(result.latency_ms / 1000).toFixed(1)}s
             </Badge>
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{result.answer}</p>
+          <Markdown text={result.answer} className="text-sm leading-relaxed text-foreground" />
           {result.recommended_action && (
             <div className="rounded border-l-2 border-primary/60 bg-background/40 px-3 py-2">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-primary">
                 Recommended action
               </div>
-              <p className="mt-0.5 text-xs leading-relaxed text-foreground/90">
-                {result.recommended_action}
-              </p>
+              <Markdown
+                text={result.recommended_action}
+                className="mt-0.5 text-xs leading-relaxed text-foreground/90"
+              />
             </div>
           )}
           <div className="flex items-center gap-2 pt-1">

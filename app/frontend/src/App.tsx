@@ -38,8 +38,25 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // POLLED. This ran once on mount and again only when an action was proposed, so the quota badge showed
+  // whatever the figure was when the page loaded and never moved during a question. /api/health touches
+  // no Genie quota and no warehouse, so a short interval is cheap. Paused while the tab is hidden.
   useEffect(() => {
-    api.health().then(setHealth).catch(() => setHealth(null));
+    let stopped = false;
+    const load = () => {
+      if (document.hidden) return;
+      api.health()
+        .then((h) => !stopped && setHealth(h))
+        .catch(() => !stopped && setHealth(null));
+    };
+    load();
+    const timer = setInterval(load, 5000);
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    };
   }, [refreshKey]);
 
   const agentsReady = health ? Object.values(health.genie_agents).filter(Boolean).length : 0;
@@ -89,9 +106,19 @@ export default function App() {
                   <Badge
                     variant="outline"
                     className="text-[11px]"
-                    title={`Genie allows about ${health.genie_quota.capacity} messages per ${health.genie_quota.window_seconds}s for the whole workspace`}
+                    title={
+                      `Genie's Conversation API allows roughly 5 messages per minute for the WHOLE ` +
+                      `workspace, so this app budgets ${health.genie_quota.capacity}. The first number is ` +
+                      `how many of those slots are in use right now, over a rolling ` +
+                      `${health.genie_quota.window_seconds}s window: it falls back to 0 as messages age ` +
+                      `out, which is why it often reads 0 straight after an answer. ` +
+                      `${health.genie_quota.sent_total} message(s) have been sent since the app started.`
+                    }
                   >
                     Genie quota {health.genie_quota.used_in_window}/{health.genie_quota.capacity}
+                    <span className="ml-1 text-muted-foreground">
+                      · {health.genie_quota.sent_total} sent
+                    </span>
                   </Badge>
                 </div>
               )}

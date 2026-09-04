@@ -100,6 +100,11 @@ class _RollingRateLimiter:
         self.capacity = max(1, per_minute)
         self.window = window
         self._starts: collections.deque[float] = collections.deque()
+        # Cumulative admissions since this process started. The window occupancy is the control, but it
+        # is a 60s window and a three-domain question takes 40 to 65 seconds, so by the time an answer is
+        # on screen its Genie calls have usually aged out and the occupancy is legitimately zero. Showing
+        # only that made the quota badge look broken after a question that plainly spent quota.
+        self._total = 0
         self._lock = threading.Lock()
         self._free = threading.Condition(self._lock)
 
@@ -111,6 +116,7 @@ class _RollingRateLimiter:
                     self._starts.popleft()
                 if len(self._starts) < self.capacity:
                     self._starts.append(now)
+                    self._total += 1
                     return True
                 # Wait only until the oldest admission ages out, or the turn's deadline.
                 wait_until = self._starts[0] + self.window
@@ -125,7 +131,7 @@ class _RollingRateLimiter:
             now = time.monotonic()
             recent = [t for t in self._starts if now - t < self.window]
             return {"used_in_window": len(recent), "capacity": self.capacity,
-                    "window_seconds": int(self.window)}
+                    "window_seconds": int(self.window), "sent_total": self._total}
 
 
 _GENIE_RATE = _RollingRateLimiter(config.GENIE_MESSAGES_PER_MINUTE)
