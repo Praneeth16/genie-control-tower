@@ -15,10 +15,13 @@ export function SectionTitle({ children, hint }: { children: ReactNode; hint?: s
   );
 }
 
+// Three fills, each carrying white text at >= 6.4:1 (crimson 9.2, blue 6.7, green 6.5). The previous
+// values were oklch lightnesses picked for a dark ground; on white they were both too pale for AA and too
+// close together to tell apart from the back of a room.
 const DOMAIN_STYLES: Record<string, string> = {
-  COLLECTIONS: "border-transparent bg-[oklch(0.48_0.17_18)] text-white",
-  GRIEVANCE: "border-transparent bg-[oklch(0.56_0.13_255)] text-white",
-  RM: "border-transparent bg-[oklch(0.60_0.14_155)] text-white",
+  COLLECTIONS: "border-transparent bg-[#8f1028] text-white",
+  GRIEVANCE: "border-transparent bg-[#1d4ed8] text-white",
+  RM: "border-transparent bg-[#146c43] text-white",
 };
 
 export const DOMAIN_LABEL: Record<string, string> = {
@@ -31,7 +34,7 @@ export function DomainBadge({ domain }: { domain: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+        "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider",
         DOMAIN_STYLES[domain] ?? "bg-muted text-muted-foreground"
       )}
     >
@@ -55,7 +58,7 @@ export function ViaBadge({ via }: { via: string | null }) {
   };
   const v = map[via ?? ""] ?? { label: via ?? "unknown", cls: "bg-muted text-muted-foreground" };
   return (
-    <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium", v.cls)}>
+    <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-medium", v.cls)}>
       {v.label}
     </span>
   );
@@ -74,7 +77,7 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+        "rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
         map[status] ?? "bg-muted text-muted-foreground"
       )}
     >
@@ -123,7 +126,7 @@ export function ErrorText({ children }: { children: ReactNode }) {
 export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</div>
@@ -136,7 +139,7 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
  *  screenshot of a bank's real customers. */
 export function SyntheticBadge() {
   return (
-    <span className="rounded border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning">
+    <span className="rounded border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-warning">
       synthetic data
     </span>
   );
@@ -178,7 +181,7 @@ export function RowTable({
         </tbody>
       </table>
       {rows.length > max && (
-        <div className="border-t border-border bg-secondary/30 px-2 py-1 text-[10px] text-muted-foreground">
+        <div className="border-t border-border bg-secondary/30 px-2 py-1 text-[11px] text-muted-foreground">
           showing {max} of {rows.length} rows
         </div>
       )}

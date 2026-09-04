@@ -50,7 +50,12 @@ const CALL_HINT = /\bLN\s?\d{3,}\b|\bloan account\b|कर्ज खाते|�
 const COMPLAINT_ID = /\bCM\s?0*\d{3,}\b/i;
 
 function normaliseComplaintId(raw: string): string {
-  return raw.toUpperCase().replace(/\s+/g, "");
+  // Zero-padded, because COMPLAINT_ID deliberately accepts an unpadded id ("CM9245") and the backend does
+  // not: documents.py only strips and uppercases, so an unpadded id came back as a confident "no record"
+  // for a complaint that exists and is readable. The voice lane already pads server-side (voice.py), so
+  // the same shorthand used to give two different answers depending on whether it was spoken or typed.
+  const digits = raw.replace(/\D/g, "");
+  return `CM${digits.padStart(7, "0")}`;
 }
 
 function detectLane(text: string): { lane: Lane; reason: string } {
@@ -308,11 +313,23 @@ export function Chat({ onActed }: { onActed: () => void }) {
 
   // Refresh the HUD as the transcript grows, but never more than once every 1.5s and never while a
   // request is already in flight. Firing per word would put the warehouse behind the conversation.
+  //
+  // When a request IS in flight the attempt is RETRIED, not dropped. Dropping it silently lost the last
+  // thing the caller said: an assist call can take seconds (16s once, see visual_qa.mjs), so a phrase
+  // arriving mid-flight armed a timer that fired and gave up, and if the speaker then stopped talking
+  // nothing re-armed it. The frozen turn kept a verdict computed from the shorter transcript — with the
+  // complaint id missing, the grievance hold never fires and the HUD shows a call as clear that is not.
   useEffect(() => {
     if (!live || !liveTranscript.trim()) return;
     const { callId } = live;
-    const timer = setTimeout(async () => {
-      if (inflight.current) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = async () => {
+      if (cancelled) return;
+      if (inflight.current) {
+        timer = setTimeout(run, 400);
+        return;
+      }
       inflight.current = true;
       setPendingCallId(callId);
       try {
@@ -329,8 +346,12 @@ export function Chat({ onActed }: { onActed: () => void }) {
         inflight.current = false;
         setPendingCallId(null);
       }
-    }, 1500);
-    return () => clearTimeout(timer);
+    };
+    timer = setTimeout(run, 1500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [liveTranscript, live, callAt]);
 
   // Changing the clock has to move the verdict on the call ALREADY on screen. In the tabbed version this
@@ -374,6 +395,32 @@ export function Chat({ onActed }: { onActed: () => void }) {
 
   return (
     <div className="space-y-4">
+      {turns.length === 0 && (
+        <Card className="border-border">
+          <CardContent className="space-y-3 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <SectionTitle hint="One thread across all three lanes. Ask an analytical question, read a live call aloud, or search what borrowers wrote — the account number carries between them instead of being retyped on another screen.">
+                Ask, call, or read the file
+              </SectionTitle>
+            </div>
+            <div className="space-y-2">
+              {(["ask", "call", "docs"] as Lane[]).map((l) => {
+                const Icon = LANE[l].icon;
+                return (
+                  <div key={l}>
+                    <div className="mb-1 flex items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-[12px] font-semibold text-foreground">{LANE[l].label}</span>
+                      <span className="text-[11px] text-muted-foreground">— {LANE[l].hint}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Composer at the TOP, in normal flow. It was a sticky bottom bar first, and that was wrong: with
           the example chips and the two call selectors it stands ~250px tall, so pinned to the viewport it
           painted straight over the conduct verdict — the one panel on this screen that decides whether an
@@ -395,7 +442,7 @@ export function Chat({ onActed }: { onActed: () => void }) {
                         title={ex.title ?? ex.text}
                         onClick={() => void send(ex.text, ex.force ? ex.lane : undefined)}
                         disabled={busy || speech.listening}
-                        className="rounded border border-border bg-secondary/50 px-2 py-1 text-left text-[11px] text-muted-foreground hover:border-primary/40 hover:text-foreground disabled:opacity-50"
+                        className="rounded border border-border bg-secondary/50 px-2 py-1 text-left text-[12px] text-muted-foreground hover:border-primary/40 hover:text-foreground disabled:opacity-50"
                       >
                         {ex.label}
                       </button>
@@ -405,7 +452,7 @@ export function Chat({ onActed }: { onActed: () => void }) {
               })}
               <button
                 onClick={() => setShowExamples(false)}
-                className="text-[10px] text-muted-foreground hover:text-foreground"
+                className="text-[11px] text-muted-foreground hover:text-foreground"
               >
                 hide examples
               </button>
@@ -413,7 +460,7 @@ export function Chat({ onActed }: { onActed: () => void }) {
           ) : (
             <button
               onClick={() => setShowExamples(true)}
-              className="text-[10px] text-muted-foreground hover:text-foreground"
+              className="text-[11px] text-muted-foreground hover:text-foreground"
             >
               show example questions
             </button>
@@ -471,8 +518,24 @@ export function Chat({ onActed }: { onActed: () => void }) {
                     : "cursor-not-allowed bg-muted text-muted-foreground")
               }
             >
-              {speech.listening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-              {speech.listening ? "Stop the call" : "Start a call"}
+              {speech.listening ? (
+                <>
+                  {/* Recording is signalled by a pulsing dot as well as the fill, the icon and the label.
+                      Primary crimson and destructive red sit 1.4:1 apart in luminance, so this pair of
+                      states must never rely on colour alone to tell them apart — see index.css. */}
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                  </span>
+                  <MicOff className="h-3.5 w-3.5" />
+                  Stop the call
+                </>
+              ) : (
+                <>
+                  <Mic className="h-3.5 w-3.5" />
+                  Start a call
+                </>
+              )}
             </button>
 
             {/* Lane. Auto is deterministic and its decision is printed on every turn, so forcing a lane
@@ -484,7 +547,7 @@ export function Chat({ onActed }: { onActed: () => void }) {
                   onClick={() => setOverride(l)}
                   title={l === "auto" ? "Pick the lane from what is named in the message" : LANE[l].hint}
                   className={
-                    "px-2 py-1 text-[11px] font-medium " +
+                    "px-2 py-1 text-[12px] font-medium " +
                     (override === l
                       ? "bg-primary text-white"
                       : "text-muted-foreground hover:bg-secondary")
@@ -496,7 +559,7 @@ export function Chat({ onActed }: { onActed: () => void }) {
             </div>
 
             {override === "auto" && input.trim() && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 → {LANE[resolvedLane].label}
               </span>
             )}
@@ -508,7 +571,7 @@ export function Chat({ onActed }: { onActed: () => void }) {
                   setTurns([]);
                   setErr(null);
                 }}
-                className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground"
               >
                 <Trash2 className="h-3 w-3" /> Clear thread
               </button>
@@ -516,13 +579,13 @@ export function Chat({ onActed }: { onActed: () => void }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-2">
-            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <label className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
               Call language
               <select
                 aria-label="Recogniser language"
                 value={locale}
                 onChange={(e) => setLocale(e.target.value)}
-                className="rounded border border-border bg-background px-1.5 py-1 text-[11px] text-foreground"
+                className="rounded border border-border bg-background px-1.5 py-1 text-[12px] text-foreground"
               >
                 <option value="en-IN">English (India)</option>
                 <option value="hi-IN">हिन्दी — Hindi</option>
@@ -530,13 +593,13 @@ export function Chat({ onActed }: { onActed: () => void }) {
               </select>
             </label>
 
-            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <label className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
               Evaluate conduct at
               <select
                 aria-label="Conduct evaluation clock"
                 value={clock}
                 onChange={(e) => setClock(e.target.value as "now" | "in" | "out")}
-                className="rounded border border-border bg-background px-1.5 py-1 text-[11px] text-foreground"
+                className="rounded border border-border bg-background px-1.5 py-1 text-[12px] text-foreground"
               >
                 <option value="now">the current time</option>
                 <option value="in">10:30 IST (inside the RBI window)</option>
@@ -544,38 +607,12 @@ export function Chat({ onActed }: { onActed: () => void }) {
               </select>
             </label>
 
-            <span className="text-[10px] leading-relaxed text-muted-foreground">
+            <span className="text-[11px] leading-relaxed text-muted-foreground">
               Analysis answers reason over 268,000 rows — expect 15–45 seconds.
             </span>
           </div>
         </CardContent>
       </Card>
-
-      {turns.length === 0 && (
-        <Card className="border-border">
-          <CardContent className="space-y-3 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <SectionTitle hint="One thread across all three lanes. Ask an analytical question, read a live call aloud, or search what borrowers wrote — the account number carries between them instead of being retyped on another screen.">
-                Ask, call, or read the file
-              </SectionTitle>
-            </div>
-            <div className="space-y-2">
-              {(["ask", "call", "docs"] as Lane[]).map((l) => {
-                const Icon = LANE[l].icon;
-                return (
-                  <div key={l}>
-                    <div className="mb-1 flex items-center gap-1.5">
-                      <Icon className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-[11px] font-semibold text-foreground">{LANE[l].label}</span>
-                      <span className="text-[10px] text-muted-foreground">— {LANE[l].hint}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {turns.map((t) => (
         <div key={t.id} data-turn={t.id}>
@@ -617,7 +654,7 @@ function TurnView({
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{turn.text}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded border border-border bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded border border-border bg-secondary/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             <Icon className="h-3 w-3" />
             {LANE[turn.lane].label} — {turn.reason}
           </span>
@@ -626,7 +663,7 @@ function TurnView({
               key={l}
               onClick={() => onRerun(turn.text, l)}
               title={LANE[l].hint}
-              className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              className="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
             >
               re-run as {LANE[l].label}
             </button>

@@ -8,7 +8,11 @@
 import { Check, X, Minus, Database, FileWarning, ShieldOff } from "lucide-react";
 import type { Guardrail, GuardrailCheck } from "../api";
 
-const RULE_LABEL: Record<string, string> = {
+/** Human names for the control identifiers. Exported because the live-call HUD renders the same rules and
+ *  was printing them raw — a bank's conduct committee should not be reading `rbi_conduct_hours` off the
+ *  screen. The machine name is still shown on every row, in the `verified by unity_catalog:…` provenance
+ *  line, which is where it belongs. */
+export const RULE_LABEL: Record<string, string> = {
   kill_switch: "Kill switch",
   action_type_allowed: "Action type permitted",
   autonomy_level: "Autonomy ceiling",
@@ -22,6 +26,8 @@ const RULE_LABEL: Record<string, string> = {
   contact_cap: "Daily contact cap",
   requires_approval: "Human approval",
   loan_account_resolvable: "Loan account supplied",
+  npa_flag: "NPA classification",
+  guardrail_integrity: "Guardrail integrity",
 };
 
 function VerifiedBadge({ verifiedBy }: { verifiedBy: string }) {
@@ -29,7 +35,7 @@ function VerifiedBadge({ verifiedBy }: { verifiedBy: string }) {
     const fn = verifiedBy.split(":")[1];
     if (fn === "UNAVAILABLE" || fn === "NOT_EVALUATED") {
       return (
-        <span className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+        <span className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[11px] font-medium text-destructive">
           <ShieldOff className="h-3 w-3" />
           {fn === "UNAVAILABLE" ? "could not verify" : "not evaluated"}
         </span>
@@ -37,7 +43,7 @@ function VerifiedBadge({ verifiedBy }: { verifiedBy: string }) {
     }
     return (
       <span
-        className="inline-flex items-center gap-1 rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success"
+        className="inline-flex items-center gap-1 rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[11px] font-medium text-success"
         title={`Verified by the Unity Catalog function ${fn}()`}
       >
         <Database className="h-3 w-3" />
@@ -47,7 +53,7 @@ function VerifiedBadge({ verifiedBy }: { verifiedBy: string }) {
   }
   if (verifiedBy.startsWith("lakebase:")) {
     return (
-      <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+      <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
         <Database className="h-3 w-3" />
         policy table
       </span>
@@ -55,7 +61,7 @@ function VerifiedBadge({ verifiedBy }: { verifiedBy: string }) {
   }
   return (
     <span
-      className="inline-flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"
+      className="inline-flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[11px] font-medium text-warning"
       title="Taken from the request payload — not independently confirmed against governed data"
     >
       <FileWarning className="h-3 w-3" />
@@ -88,14 +94,14 @@ function CheckRow({ check }: { check: GuardrailCheck }) {
           </span>
           {check.applicable && <VerifiedBadge verifiedBy={check.verified_by} />}
           {check.limit !== null && check.limit !== undefined && (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               limit: {String(check.limit)}
             </span>
           )}
         </div>
         <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{check.detail}</div>
         {check.legal_basis && !check.passed && (
-          <div className="mt-1 rounded border-l-2 border-warning/60 bg-warning/5 px-2 py-1 text-[11px] leading-relaxed text-warning/90">
+          <div className="mt-1 rounded border-l-2 border-warning/60 bg-warning/5 px-2 py-1 text-[12px] leading-relaxed text-warning/90">
             {check.legal_basis}
           </div>
         )}
@@ -128,7 +134,7 @@ export function GuardrailVerdict({ guardrail }: { guardrail: Guardrail }) {
           </span>
         </div>
         {/* The honesty line. Stated plainly so nobody has to infer how much is really enforced. */}
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[12px] text-muted-foreground">
           {verified_count} verified against governed data
           {payload_count > 0 && `, ${payload_count} taken from the request`}
         </span>

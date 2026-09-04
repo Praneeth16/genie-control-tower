@@ -24,7 +24,7 @@ export function SearchTurn({
   if (!hits.ok) {
     return (
       <Card className="border-warning/40">
-        <CardContent className="p-4 text-[11px] leading-relaxed text-warning">{hits.note}</CardContent>
+        <CardContent className="p-4 text-[12px] leading-relaxed text-warning">{hits.note}</CardContent>
       </Card>
     );
   }
@@ -34,7 +34,7 @@ export function SearchTurn({
         <SectionTitle hint="Vector Search over 713 letters. The index is queried as the application's service principal and never granted to end users; every record it finds is then re-read under YOUR entitlements. Retrieval locates the letter, governance still decides whether you may read it.">
           What borrowers actually said
         </SectionTitle>
-        <p className="text-[11px] leading-relaxed text-muted-foreground">{hits.note}</p>
+        <p className="text-[12px] leading-relaxed text-muted-foreground">{hits.note}</p>
         <div className="space-y-2">
           {hits.hits.map((h) => (
             <div
@@ -46,7 +46,7 @@ export function SearchTurn({
                   : "border-border bg-background")
               }
             >
-              <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 <span className="font-semibold text-foreground">
                   {h.complaint_id ?? "policy document"}
                 </span>
@@ -71,7 +71,7 @@ export function SearchTurn({
                 <p className="mt-1 text-xs leading-relaxed text-foreground/85">{h.snippet}</p>
               )}
               {h.outside_your_scope && (
-                <p className="mt-1 text-[10px] font-semibold text-warning">
+                <p className="mt-1 text-[11px] font-semibold text-warning">
                   Outside your entitlement — the letter exists and matched, but the record is not yours
                   to read. This is not "no such complaint".
                 </p>
@@ -158,7 +158,7 @@ export function EvidenceTurn({
             <SectionTitle hint="Letters, internal compliance notes and agency contracts live in a Unity Catalog volume, parsed into a Delta table in the same schema — so the row filters and column masks that govern the tables govern the documents too.">
               What our systems recorded
             </SectionTitle>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
               {[
                 ["complaint", rec.complaint_id],
                 ["received", rec.received_date],
@@ -180,7 +180,7 @@ export function EvidenceTurn({
                 </div>
               ))}
             </dl>
-            <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
+            <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
               The customer id is pseudonymised for you unless you are cleared to read raw identifiers.
               It is a stable token, so joins still work.
             </p>
@@ -194,14 +194,14 @@ export function EvidenceTurn({
               <SectionTitle>What the customer wrote</SectionTitle>
             </div>
             {rec.document_text ? (
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 text-[10px] leading-relaxed text-foreground/85">
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 text-[11px] leading-relaxed text-foreground/85">
                 {rec.document_text}
               </pre>
             ) : (
               <p className="text-xs text-muted-foreground">No letter on file for this complaint.</p>
             )}
             {rec.file_path && (
-              <p className="font-mono text-[10px] text-muted-foreground">{rec.file_path}</p>
+              <p className="font-mono text-[11px] text-muted-foreground">{rec.file_path}</p>
             )}
           </CardContent>
         </Card>
@@ -228,16 +228,16 @@ export function EvidenceTurn({
 
           {draft?.ok && (
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <div className="flex flex-wrap items-center gap-2 text-[12px]">
                 <span className="text-muted-foreground">written to</span>
                 <span className="font-mono text-foreground">{draft.document_path}</span>
                 {draft.grounded_in_letter && (
-                  <span className="rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[10px] text-success">
+                  <span className="rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[11px] text-success">
                     grounded in the customer's letter
                   </span>
                 )}
               </div>
-              <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 text-[10px] leading-relaxed text-foreground/85">
+              <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 text-[11px] leading-relaxed text-foreground/85">
                 {draft.preview}
               </pre>
               <Button size="sm" onClick={proposeDispatch} disabled={busy !== null}>
@@ -246,7 +246,7 @@ export function EvidenceTurn({
               </Button>
               {verdict && (
                 <div className="space-y-1 pt-1">
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-[12px] text-muted-foreground">
                     Action #{verdict.id} staged — decide it on the Approvals tab.
                   </div>
                   <GuardrailVerdict guardrail={verdict.guardrail} />
@@ -254,11 +254,11 @@ export function EvidenceTurn({
               )}
               {outbound.length > 0 && (
                 <div className="space-y-1 pt-1">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Drafts the agent has produced
                   </div>
                   {outbound.slice(0, 10).map((d) => (
-                    <div key={d.path} className="flex justify-between gap-2 text-[11px]">
+                    <div key={d.path} className="flex justify-between gap-2 text-[12px]">
                       <span className="font-mono text-foreground">{d.name}</span>
                       <span className="tabular-nums text-muted-foreground">{d.size} bytes</span>
                     </div>

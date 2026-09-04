@@ -28,7 +28,7 @@ function Timeline({ events }: { events: ActionEvent[] }) {
             ? `${d.verified_count} controls verified against governed data`
             : "");
         return (
-          <li key={e.id} className="flex gap-2 text-[11px]">
+          <li key={e.id} className="flex gap-2 text-[12px]">
             <span className="w-36 shrink-0 tabular-nums text-muted-foreground">
               {fmtIST(e.ts)}
             </span>
@@ -92,33 +92,33 @@ function ActionRow({ action, onChanged }: { action: Action; onChanged: () => voi
     <Card className="border-border">
       <CardContent className="space-y-2 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[11px] text-muted-foreground">#{action.id}</span>
+          <span className="font-mono text-[12px] text-muted-foreground">#{action.id}</span>
           <StatusBadge status={action.status} />
           <span className="text-xs font-semibold text-foreground">{action.action_type}</span>
-          <span className="font-mono text-[11px] text-muted-foreground">{action.subject}</span>
+          <span className="font-mono text-[12px] text-muted-foreground">{action.subject}</span>
           {action.region && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-[11px]">
               {action.region}
             </Badge>
           )}
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-[11px]">
             L{action.level}
           </Badge>
           {action.scheduled_at && (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               for {fmtIST(action.scheduled_at)}
             </span>
           )}
           <button
             onClick={() => setExpanded(!expanded)}
-            className="ml-auto text-[11px] font-medium text-primary hover:underline"
+            className="ml-auto text-[12px] font-medium text-primary hover:underline"
           >
             {expanded ? "hide" : "review"}
           </button>
         </div>
 
         {action.external_ref && (
-          <div className="text-[11px] text-success">
+          <div className="text-[12px] text-success">
             landed in the downstream system as{" "}
             <span className="font-mono">{action.external_ref}</span>
           </div>
@@ -128,7 +128,7 @@ function ActionRow({ action, onChanged }: { action: Action; onChanged: () => voi
           <div className="space-y-3 border-t border-border pt-2">
             {error && <ErrorText>{error}</ErrorText>}
 
-            <div className="grid gap-2 text-[11px] sm:grid-cols-2">
+            <div className="grid gap-2 text-[12px] sm:grid-cols-2">
               <div>
                 <span className="text-muted-foreground">proposed by </span>
                 <span className="font-mono text-foreground">{action.requested_by}</span>
@@ -145,21 +145,21 @@ function ActionRow({ action, onChanged }: { action: Action; onChanged: () => voi
               )}
             </div>
 
-            <pre className="max-h-28 overflow-auto rounded border border-border bg-background/60 p-2 text-[10px] text-foreground/80">
+            <pre className="max-h-28 overflow-auto rounded border border-border bg-background/60 p-2 text-[11px] text-foreground/80">
               {payload}
             </pre>
 
             {guardrail ? (
               <GuardrailVerdict guardrail={guardrail} />
             ) : (
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" /> re-checking the controls…
               </div>
             )}
 
             {events.length > 0 && (
               <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Lineage
                 </div>
                 <Timeline events={events} />
@@ -198,7 +198,7 @@ function ActionRow({ action, onChanged }: { action: Action; onChanged: () => voi
                 </Button>
               )}
               {action.status === "escalated" && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-warning">
+                <span className="inline-flex items-center gap-1 text-[12px] text-warning">
                   <ShieldX className="h-3.5 w-3.5" />
                   A control refused this at execution time, even though it had been approved.
                 </span>

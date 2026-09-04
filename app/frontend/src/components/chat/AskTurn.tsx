@@ -22,7 +22,7 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import { api, AskResult, Guardrail } from "../../api";
-import { DomainBadge, DOMAIN_LABEL, ErrorText, RowTable, SectionTitle, ViaBadge } from "../kit";
+import { DomainBadge, DOMAIN_LABEL, ErrorText, fmtIST, RowTable, SectionTitle, ViaBadge } from "../kit";
 import { GuardrailVerdict } from "../Guardrails";
 
 function LegCard({ leg }: { leg: AskResult["legs"][number] }) {
@@ -35,20 +35,20 @@ function LegCard({ leg }: { leg: AskResult["legs"][number] }) {
             {DOMAIN_LABEL[leg.domain] ?? leg.domain}
           </span>
           <ViaBadge via={leg.via} />
-          <span className="ml-auto inline-flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+          <span className="ml-auto inline-flex items-center gap-1 text-[12px] tabular-nums text-muted-foreground">
             <Clock className="h-3 w-3" />
             {(leg.elapsed_ms / 1000).toFixed(1)}s · {leg.row_count} rows
           </span>
         </div>
 
         {leg.error && (
-          <div className="rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] leading-relaxed text-warning">
+          <div className="rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[12px] leading-relaxed text-warning">
             {leg.error}
           </div>
         )}
 
         {leg.narrative_defect && (
-          <div className="rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] leading-relaxed text-warning">
+          <div className="rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[12px] leading-relaxed text-warning">
             {leg.narrative_defect}
           </div>
         )}
@@ -58,13 +58,13 @@ function LegCard({ leg }: { leg: AskResult["legs"][number] }) {
 
         {leg.sql && (
           <Collapsible>
-            <CollapsibleTrigger className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+            <CollapsibleTrigger className="flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">
               <Code2 className="h-3 w-3" />
               Show the SQL Genie wrote
               <ChevronDown className="h-3 w-3" />
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <pre className="mt-2 max-h-64 overflow-auto rounded border border-border bg-background/60 p-2 text-[10px] leading-relaxed text-foreground/80">
+              <pre className="mt-2 max-h-64 overflow-auto rounded border border-border bg-background/60 p-2 text-[11px] leading-relaxed text-foreground/80">
                 {leg.sql}
               </pre>
               {leg.rows.length > 0 && (
@@ -88,7 +88,7 @@ function TraceWaterfall({ result }: { result: AskResult }) {
     <div className="space-y-1.5">
       {result.legs.map((l) => (
         <div key={l.domain} className="flex items-center gap-2">
-          <span className="w-24 shrink-0 text-[10px] font-semibold uppercase text-muted-foreground">
+          <span className="w-24 shrink-0 text-[11px] font-semibold uppercase text-muted-foreground">
             {l.domain}
           </span>
           <div className="h-3 flex-1 overflow-hidden rounded-sm bg-secondary">
@@ -97,23 +97,23 @@ function TraceWaterfall({ result }: { result: AskResult }) {
               style={{ width: `${Math.max(2, (l.elapsed_ms / max) * 100)}%` }}
             />
           </div>
-          <span className="w-14 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+          <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
             {(l.elapsed_ms / 1000).toFixed(1)}s
           </span>
         </div>
       ))}
       <div className="flex items-center gap-2 border-t border-border/60 pt-1.5">
-        <span className="w-24 shrink-0 text-[10px] font-semibold uppercase text-foreground">
+        <span className="w-24 shrink-0 text-[11px] font-semibold uppercase text-foreground">
           whole turn
         </span>
         <div className="h-3 flex-1 overflow-hidden rounded-sm bg-secondary">
           <div className="h-full w-full rounded-sm bg-foreground/30" />
         </div>
-        <span className="w-14 shrink-0 text-right text-[10px] font-semibold tabular-nums text-foreground">
+        <span className="w-14 shrink-0 text-right text-[11px] font-semibold tabular-nums text-foreground">
           {(result.latency_ms / 1000).toFixed(1)}s
         </span>
       </div>
-      <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
+      <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
         Legs run in parallel, so the turn costs roughly the slowest domain plus the router and fuser
         calls — not the sum of the domains.
       </p>
@@ -124,7 +124,7 @@ function TraceWaterfall({ result }: { result: AskResult }) {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       <div className="mt-0.5 font-mono text-xs text-foreground">{value}</div>
@@ -141,11 +141,25 @@ function toLocalInput(d: Date): string {
 }
 
 /** A compliant slot by default so the happy path works, while leaving it editable — moving it to an
- *  evening is how the RBI contact-window control gets demonstrated. */
+ *  evening is how the RBI contact-window control gets demonstrated.
+ *
+ *  15:00 **IST**, expressed in the viewer's local time. `datetime-local` is interpreted as LOCAL time, so
+ *  writing 15:00 into it schedules 15:00 in whatever zone the presenting laptop is in — and 15:00 PDT is
+ *  03:30 IST, which `rbi_conduct_hours` correctly refuses. The "compliant by default" path would then be
+ *  refused before anyone touched the control, which is the opposite of the point. Everywhere else in this
+ *  app pins IST explicitly rather than trusting the viewer's clock (see fmtIST in kit.tsx); this was the
+ *  one place that did not.
+ */
 function defaultSchedule(): string {
-  const d = new Date();
-  d.setHours(15, 0, 0, 0);
-  return toLocalInput(d);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "01";
+  // IST is UTC+5:30 and has no daylight saving, so 15:00 IST is 09:30 UTC on the same IST date.
+  return toLocalInput(new Date(`${g("year")}-${g("month")}-${g("day")}T09:30:00Z`));
 }
 
 export function AskTurn({ result, onActed }: { result: AskResult; onActed: () => void }) {
@@ -192,7 +206,7 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
             <SectionTitle>Routing decision</SectionTitle>
           </div>
           {result.router_fallback && (
-            <div className="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-[11px] text-warning">
+            <div className="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-[12px] text-warning">
               The router did not return a usable decision, so a single domain was consulted rather than
               guessing across all three.
             </div>
@@ -218,14 +232,14 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             <SectionTitle>Supervisor answer</SectionTitle>
-            <Badge variant="outline" className="ml-auto text-[10px]">
+            <Badge variant="outline" className="ml-auto text-[11px]">
               {(result.latency_ms / 1000).toFixed(1)}s
             </Badge>
           </div>
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{result.answer}</p>
           {result.recommended_action && (
             <div className="rounded border-l-2 border-primary/60 bg-background/40 px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-primary">
                 Recommended action
               </div>
               <p className="mt-0.5 text-xs leading-relaxed text-foreground/90">
@@ -238,8 +252,14 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
               size="sm"
               variant={rated === 1 ? "default" : "outline"}
               onClick={async () => {
-                await api.feedback(result.session_uuid, 1);
-                setRated(1);
+                // Caught, not floated: a failed write used to leave the thumb un-highlighted with no
+                // explanation and an unhandled rejection that surfaced in QA as an unrelated pageerror.
+                try {
+                  await api.feedback(result.session_uuid, 1);
+                  setRated(1);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                }
               }}
             >
               <ThumbsUp className="h-3.5 w-3.5" />
@@ -248,14 +268,18 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
               size="sm"
               variant={rated === -1 ? "default" : "outline"}
               onClick={async () => {
-                await api.feedback(result.session_uuid, -1);
-                setRated(-1);
+                try {
+                  await api.feedback(result.session_uuid, -1);
+                  setRated(-1);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                }
               }}
             >
               <ThumbsDown className="h-3.5 w-3.5" />
             </Button>
             {result.trace_id && (
-              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+              <span className="ml-auto font-mono text-[11px] text-muted-foreground">
                 trace {result.trace_id.slice(0, 20)}
               </span>
             )}
@@ -288,7 +312,7 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
               <Field label="Subject" value={result.action_draft.subject} />
               <Field label="Region" value={result.action_draft.region ?? "—"} />
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Scheduled for
                 </div>
                 <input
@@ -297,12 +321,20 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
                   onChange={(e) => setScheduledAt(e.target.value)}
                   className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
                 />
-                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  {/* The control evaluates this instant in IST. Showing that conversion is not decoration:
+                      the input reads in the presenter's own zone, so without it a refusal for 03:30 IST
+                      looks like a bug when the box plainly says 15:00. */}
+                  {scheduledAt && (
+                    <span className="text-foreground">
+                      {fmtIST(new Date(scheduledAt).toISOString(), false)} ·{" "}
+                    </span>
+                  )}
                   Try an evening time to see the RBI contact-window control refuse it.
                 </div>
               </div>
             </div>
-            <pre className="max-h-32 overflow-auto rounded border border-border bg-background/60 p-2 text-[10px] text-foreground/80">
+            <pre className="max-h-32 overflow-auto rounded border border-border bg-background/60 p-2 text-[11px] text-foreground/80">
               {JSON.stringify(result.action_draft.payload, null, 2)}
             </pre>
             <Button size="sm" onClick={propose} disabled={proposing}>
@@ -317,7 +349,7 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
 
             {verdict && (
               <div className="space-y-2 pt-1">
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-[12px] text-muted-foreground">
                   Action #{verdict.id} staged
                   {verdict.role && ` · requires sign-off by ${verdict.role}`} · decide it on the
                   Approvals tab

@@ -10,7 +10,7 @@
 import { useEffect, useState } from "react";
 import { BarChart3, ExternalLink } from "lucide-react";
 import { api } from "../api";
-import { ErrorText, Page, SectionTitle, SyntheticBadge } from "./kit";
+import { ErrorText, SectionTitle, SyntheticBadge } from "./kit";
 
 export function Dashboard() {
   const [info, setInfo] = useState<{ dashboard_id: string | null; workspace_host: string } | null>(null);
@@ -20,17 +20,18 @@ export function Dashboard() {
     api.dashboard().then(setInfo).catch((e) => setErr(String(e.message || e)));
   }, []);
 
-  if (err) return <Page><ErrorText>{err}</ErrorText></Page>;
-  if (!info) return <Page><div className="text-xs text-muted-foreground">Loading dashboard…</div></Page>;
+  // No <Page> wrapper here: App.tsx already wraps every tab body in one. Nesting them doubled the
+  // padding on this tab alone, so the dashboard sat inset from the header and the other three tabs, and
+  // the iframe height below — tuned against a single Page — pushed its bottom edge past the fold.
+  if (err) return <ErrorText>{err}</ErrorText>;
+  if (!info) return <div className="text-xs text-muted-foreground">Loading dashboard…</div>;
 
   if (!info.dashboard_id) {
     return (
-      <Page>
-        <ErrorText>
-          No dashboard is configured. Publish one with{" "}
-          <code>python3 dashboards/build_dashboard.py --deploy</code> and set <code>DASHBOARD_ID</code>.
-        </ErrorText>
-      </Page>
+      <ErrorText>
+        No dashboard is configured. Publish one with{" "}
+        <code>python3 dashboards/build_dashboard.py --deploy</code> and set <code>DASHBOARD_ID</code>.
+      </ErrorText>
     );
   }
 
@@ -39,7 +40,7 @@ export function Dashboard() {
   const full = `${host}/dashboardsv3/${info.dashboard_id}/published`;
 
   return (
-    <Page>
+    <div>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <SectionTitle hint="Published without embedded credentials, so every tile runs as you — the same row filters and column masks that govern the Genie Agents govern this page.">
           <span className="inline-flex items-center gap-2">
@@ -53,7 +54,7 @@ export function Dashboard() {
             href={full}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-secondary"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[12px] font-medium text-foreground hover:bg-secondary"
           >
             Open in workspace <ExternalLink className="h-3 w-3" />
           </a>
@@ -69,10 +70,10 @@ export function Dashboard() {
         className="h-[calc(100vh-15rem)] min-h-[38rem] w-full rounded-lg border border-border bg-card"
       />
 
-      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
         If the frame is blank, open the dashboard in the workspace once to establish the session — the
         embed carries your browser session and cannot mint one of its own.
       </p>
-    </Page>
+    </div>
   );
 }

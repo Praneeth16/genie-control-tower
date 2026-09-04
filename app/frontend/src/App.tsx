@@ -46,13 +46,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card/60">
+      {/* A 3px crimson rule carries the accent identity at the top of every screen. On a light ground the
+          header would otherwise be white-on-near-white with only a hairline to separate it. */}
+      <header className="border-t-[3px] border-t-primary border-b border-border bg-card">
         <Page className="py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-primary" />
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-primary">
                   Databricks · Genie Agents
                 </span>
               </div>
@@ -70,12 +72,12 @@ export default function App() {
               <SyntheticBadge />
               {health && (
                 <div className="flex flex-wrap justify-end gap-1.5">
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-[11px]">
                     {agentsReady}/3 agents
                   </Badge>
                   <Badge
                     variant="outline"
-                    className={`text-[10px] ${health.obo_active ? "border-success/40 text-success" : "border-warning/40 text-warning"}`}
+                    className={`text-[11px] ${health.obo_active ? "border-success/40 text-success" : "border-warning/40 text-warning"}`}
                     title={
                       health.obo_active
                         ? "Reads execute as you, so Unity Catalog row filters and column masks apply"
@@ -86,7 +88,7 @@ export default function App() {
                   </Badge>
                   <Badge
                     variant="outline"
-                    className="text-[10px]"
+                    className="text-[11px]"
                     title={`Genie allows about ${health.genie_quota.capacity} messages per ${health.genie_quota.window_seconds}s for the whole workspace`}
                   >
                     Genie quota {health.genie_quota.used_in_window}/{health.genie_quota.capacity}
@@ -94,7 +96,7 @@ export default function App() {
                 </div>
               )}
               {health && (
-                <span className="font-mono text-[10px] text-muted-foreground">
+                <span className="font-mono text-[11px] text-muted-foreground">
                   {health.caller}
                 </span>
               )}
@@ -104,7 +106,7 @@ export default function App() {
           {health && !health.obo_active && (
             <div className="mt-3 flex items-start gap-2 rounded border border-warning/40 bg-warning/10 px-3 py-2">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-              <p className="text-[11px] leading-relaxed text-warning">
+              <p className="text-[12px] leading-relaxed text-warning">
                 This request carried no forwarded user token, so business reads are running as the app
                 service principal and you are seeing the whole book. That is expected locally; in the
                 deployed app it would mean per-user row filtering is not in effect.
@@ -144,7 +146,7 @@ export default function App() {
 
       <footer className="border-t border-border py-4">
         <Page className="py-0">
-          <p className="text-[10px] leading-relaxed text-muted-foreground">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
             Demonstration built on synthetic data generated for this workshop. No real customer
             data is used, read or reproduced anywhere in this application. Regulatory citations shown
             against each control describe the rule the control implements and must be confirmed by the

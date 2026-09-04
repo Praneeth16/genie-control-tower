@@ -1,5 +1,9 @@
 <!doctype html>
-<html lang="en" class="dark">
+<!-- class="light" is LOAD-BEARING, not decoration. AppKit ships
+     `@media (prefers-color-scheme: dark) { :root:not(.light) { …dark tokens… } }`, and `:root:not(.light)`
+     outranks our own `:root` on specificity — so without this class every viewer whose OS is in dark mode
+     gets AppKit's dark palette over our light one, whatever index.css says. -->
+<html lang="en" class="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

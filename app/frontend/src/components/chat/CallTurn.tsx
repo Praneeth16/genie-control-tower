@@ -13,6 +13,7 @@ import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { ShieldCheck } from "lucide-react";
 import type { VoiceAssist } from "../../api";
 import { RowTable, SectionTitle, Stat } from "../kit";
+import { RULE_LABEL } from "../Guardrails";
 
 export function CallTurn({
   assist,
@@ -47,7 +48,7 @@ export function CallTurn({
               Conduct
             </SectionTitle>
             {live && (
-              <span className="mb-3 inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-destructive">
+              <span className="mb-3 inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-destructive">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" />
                 live
               </span>
@@ -72,9 +73,9 @@ export function CallTurn({
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
                 )}
                 <div>
-                  <div className="font-semibold">{c.rule}</div>
+                  <div className="font-semibold">{RULE_LABEL[c.rule] ?? c.rule}</div>
                   <div className="text-muted-foreground">{c.detail}</div>
-                  <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <div className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                     <ShieldCheck className="h-3 w-3" />
                     verified by {c.verified_by}
                   </div>
@@ -83,7 +84,7 @@ export function CallTurn({
             ))}
           </div>
           {conductFail.length > 0 && (
-            <p className="text-[11px] font-semibold text-destructive">
+            <p className="text-[12px] font-semibold text-destructive">
               {conductFail.length} control(s) failed — do not proceed with recovery on this call.
             </p>
           )}
@@ -111,7 +112,7 @@ export function CallTurn({
           </div>
 
           {assist.not_visible && (
-            <p className="text-[11px] leading-relaxed text-warning">
+            <p className="text-[12px] leading-relaxed text-warning">
               An identifier was recognised but no record came back. Under on-behalf-of-user auth that
               means it is <strong>outside your entitlement</strong> — it does not mean the record does
               not exist. Escalate rather than telling the customer there is no such account.
@@ -142,7 +143,7 @@ export function CallTurn({
             <div>
               <SectionTitle>Referenced complaint</SectionTitle>
               <RowTable columns={[]} rows={[assist.complaint]} />
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-[12px] text-muted-foreground">
                 Received {String(assist.complaint.received_date ?? "—")} (date only — no time is
                 recorded on a complaint, so none is shown)
               </p>

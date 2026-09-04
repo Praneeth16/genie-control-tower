@@ -94,6 +94,30 @@ if (JSON.stringify(tabs) !== JSON.stringify(EXPECTED_TABS)) {
   problems.push(`nav is ${JSON.stringify(tabs)}, expected ${JSON.stringify(EXPECTED_TABS)}`);
 }
 
+// THE APP MUST BE LIGHT EVEN FOR A VIEWER WHOSE OS IS IN DARK MODE. AppKit ships a
+// prefers-color-scheme:dark block scoped to `:root:not(.light)` that outranks our own `:root`, so the
+// theme depends on a class on <html> rather than on our stylesheet alone. Headless Chrome defaults to
+// light, which is exactly why this went unnoticed until the built CSS was read by hand.
+await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }]);
+await new Promise((r) => setTimeout(r, 400));
+// Compared as a RESOLVED TOKEN, not as a parsed colour. The first version of this check computed a
+// luminance from `bg.match(/\d+/g)`, which on `oklch(0.141 0.005 285.823)` reads digits out of a decimal
+// string — it happened to flag the regression and would not have survived a palette change. The light
+// theme owns --background; if AppKit's dark block wins, that token is an oklch value, not our hex.
+const LIGHT_BACKGROUND = "#f6f7f9";
+const themeUnderDarkOS = await page.evaluate(() => ({
+  token: getComputedStyle(document.documentElement).getPropertyValue("--background").trim(),
+  pinned: document.documentElement.classList.contains("light"),
+}));
+console.log(`  under OS dark mode: --background = ${themeUnderDarkOS.token}, html.light = ${themeUnderDarkOS.pinned}`);
+if (themeUnderDarkOS.token.toLowerCase() !== LIGHT_BACKGROUND) {
+  problems.push(
+    `app does not stay light for a viewer whose OS prefers dark: --background resolved to ` +
+    `${themeUnderDarkOS.token}, expected ${LIGHT_BACKGROUND}. The light theme is not pinned ` +
+    `(class="light" on <html> — see index.html).`);
+}
+await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" }]);
+
 const askText = await shot("1-ask", 2500);
 console.log("header sample:", askText.split("\n").slice(0, 8).join(" | "));
 // The composer has to offer all three lanes from one place, or the merge only moved the seam.
@@ -212,10 +236,10 @@ const populated = /contact_attempts/.test(conductText);
 const oohShown = /out_of_hours/.test(conductText);
 console.log("  contact history populated:", populated);
 console.log("  prior out-of-hours attempts shown:", oohShown);
-if (!populated) problems.push("voice: contact history is empty for LN001135, which has 55 recorded attempts");
-if (!oohShown) problems.push("voice: out-of-hours attempts column missing for an account with 7 on record");
+if (!populated) problems.push("voice: contact history is empty for LN004703, which has recorded attempts");
+if (!oohShown) problems.push("voice: out-of-hours attempts column missing from the contact-history panel");
 if (/No contact attempts are recorded/.test(conductText)) {
-  problems.push("voice: panel claims no contact attempts for an account that has 66 — likely a frontend/backend field-name skew");
+  problems.push("voice: panel claims no contact attempts for LN004703, which has them — likely a frontend/backend field-name skew");
 }
 if (/attempts_90d|out_of_hours_90d|collected_90d/.test(conductText)) {
   problems.push("voice: contact history still labelled 90d, but the query applies no date filter");
@@ -268,7 +292,12 @@ for (const marker of ["Kill switch", "Guardrail integrity", "What you are entitl
 }
 console.log("  masked id shown:", /CU-[0-9a-f]{10}/.test(govText));
 
-console.log("\n=== problems (" + problems.length + ") ===");
-[...new Set(problems)].slice(0, 25).forEach((p) => console.log("  " + p));
+const unique = [...new Set(problems)];
+console.log("\n=== problems (" + unique.length + ") ===");
+unique.slice(0, 25).forEach((p) => console.log("  " + p));
 await page.close();
 await browser.disconnect();
+// EXIT NON-ZERO on any problem. This printed its findings and exited 0, so every regression it detected —
+// a missing composer control, a fabricated :00 IST minute — was a line of stdout that any wrapper or CI
+// step read as a pass. A verification tool that cannot fail is not one.
+process.exit(unique.length ? 1 : 0);

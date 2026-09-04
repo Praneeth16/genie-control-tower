@@ -1,72 +1,97 @@
 @import "tailwindcss";
 @import "@databricks/appkit-ui/styles.css";
 
-/* Tailwind v4: treat .dark on <html> as the dark-variant trigger. */
+/* Tailwind v4: treat .dark on <html> as the dark-variant trigger. Kept so a dark variant can be added
+   later without touching every component; nothing sets .dark today. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Genie Control Tower — Databricks AppKit DARK theme.
+ * Genie Control Tower — LIGHT theme.
  *
- * A deep crimson leads as primary, which reads as a banking/collections context without reproducing
- * any bank's brand identity: this is a Databricks demonstration ABOUT a bank's use cases, not a
- * mock-up of any bank's product, and it should not be mistakable for one.
+ * Deep crimson leads as primary, which reads as a banking and collections context without reproducing any
+ * bank's brand identity: this is a Databricks demonstration ABOUT a bank's use cases, not a mock-up of any
+ * bank's product, and it must not be mistakable for one.
  *
- * Forced dark: the same tokens live in :root and .dark so the OS setting cannot flip it mid-demo.
+ * Colours are written as HEX, not oklch, so the contrast ratios below are auditable by anyone reading this
+ * file. Every text pairing meets WCAG 2.2 AA (>= 4.5:1); measured, not asserted:
+ *
+ *   foreground        on background   16.9 : 1      white     on primary       9.2 : 1
+ *   foreground        on card         18.1 : 1      white     on destructive   6.5 : 1
+ *   muted-foreground  on background    6.2 : 1      white     on success       6.5 : 1
+ *   muted-foreground  on card          6.6 : 1      primary   on card          9.2 : 1
+ *   muted-foreground  on secondary     5.7 : 1      warning   on card          6.3 : 1
+ *
+ * `warning` and `success` are DARK amber and DARK green rather than the bright dark-theme values. They are
+ * used as TEXT on a pale tint (`text-warning` over `bg-warning/10`), and bright amber on near-white fails
+ * AA outright. The tint carries the colour; the text carries the contrast.
+ *
+ * KNOWN, MITIGATED CONFLICT: primary crimson and destructive red are both dark reds, 1.4:1 apart in
+ * luminance, so they are not reliably separable by hue alone. This is forced — `destructive` is used both
+ * as text on white and as a background under white text, and contrast is symmetric, so it cannot be a
+ * bright red. It matters most where the two swap in place (Start a call / Stop the call), so that state is
+ * distinguished by label, icon AND a pulsing ring rather than by colour. Non-colour cues are required
+ * anywhere these two carry meaning; do not add a control whose only signal is red-versus-red.
  */
-:root,
-.dark {
-  color-scheme: dark;
+:root {
+  /* Paired with class="light" on <html>. AppKit's stylesheet carries a prefers-color-scheme:dark block
+     scoped to `:root:not(.light)`, which outranks this rule on specificity; without the class, a viewer
+     in OS dark mode silently gets AppKit's dark tokens instead of these. See index.html. */
+  color-scheme: light;
   --radius: 0.625rem;
 
-  --background: oklch(0.178 0.013 270.6); /* #0f1117 */
-  --foreground: oklch(0.931 0.008 271.3); /* #e6e8ee */
-  --card: oklch(0.223 0.018 270.5); /* #181b24 panel */
-  --card-foreground: oklch(0.931 0.008 271.3);
-  --popover: oklch(0.223 0.018 270.5);
-  --popover-foreground: oklch(0.931 0.008 271.3);
+  /* Surfaces. The page is a faint cool grey and cards are pure white, so a card reads as raised from
+     the page without a shadow — necessary in a light UI, where a white-on-white panel disappears. */
+  --background: #f6f7f9;
+  --foreground: #14161c;
+  --card: #ffffff;
+  --card-foreground: #14161c;
+  --popover: #ffffff;
+  --popover-foreground: #14161c;
 
-  --primary: oklch(0.55 0.175 18); /* deep crimson */
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.258 0.025 271.3); /* #1f2330 panel-2 */
-  --secondary-foreground: oklch(0.931 0.008 271.3);
-  --muted: oklch(0.258 0.025 271.3);
-  --muted-foreground: oklch(0.655 0.024 271.9); /* #8b90a0 */
-  --accent: oklch(0.258 0.025 271.3);
-  --accent-foreground: oklch(0.70 0.145 20); /* link crimson */
+  --primary: #8f1028;              /* deep crimson */
+  --primary-foreground: #ffffff;
+  --secondary: #eceef2;            /* quiet fill: chips, table headers */
+  --secondary-foreground: #14161c;
+  --muted: #eceef2;
+  --muted-foreground: #565d6d;
+  --accent: #eceef2;
+  --accent-foreground: #8f1028;
 
-  --destructive: oklch(0.692 0.198 23.8); /* #ff5d5d */
-  --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.746 0.181 152.3); /* #2ecc71 */
-  --success-foreground: oklch(0.16 0.013 270.5);
-  --warning: oklch(0.775 0.163 76.2); /* #f0a500 */
-  --warning-foreground: oklch(0.16 0.013 270.5);
+  --destructive: #b3261e;
+  --destructive-foreground: #ffffff;
+  --success: #146c43;
+  --success-foreground: #ffffff;
+  --warning: #8a5300;
+  --warning-foreground: #ffffff;
 
-  --border: oklch(0.306 0.026 269.5); /* #2a2f3d */
-  --input: oklch(0.306 0.026 269.5);
-  --ring: oklch(0.55 0.175 18); /* #008BC5 focus */
+  --border: #d8dce4;
+  --input: #d8dce4;
+  --ring: #8f1028;
 
-  --chart-1: oklch(0.603 0.131 236.8); /* bright blue */
-  --chart-2: oklch(0.431 0.126 251.2); /* deep blue */
-  --chart-3: oklch(0.775 0.163 76.2); /* warning */
-  --chart-4: oklch(0.746 0.181 152.3); /* success */
-  --chart-5: oklch(0.694 0.164 318.2); /* violet */
+  /* Chart series, darkened for a light ground so a thin 1px line still reads at projector distance. */
+  --chart-1: #1f6feb;
+  --chart-2: #0b4f8a;
+  --chart-3: #8a5300;
+  --chart-4: #146c43;
+  --chart-5: #6f42c1;
 
-  --sidebar: oklch(0.223 0.018 270.5);
-  --sidebar-foreground: oklch(0.931 0.008 271.3);
-  --sidebar-primary: oklch(0.603 0.131 236.8);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.258 0.025 271.3);
-  --sidebar-accent-foreground: oklch(0.726 0.113 230.6);
-  --sidebar-border: oklch(0.306 0.026 269.5);
-  --sidebar-ring: oklch(0.603 0.131 236.8);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #14161c;
+  --sidebar-primary: #8f1028;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eceef2;
+  --sidebar-accent-foreground: #8f1028;
+  --sidebar-border: #d8dce4;
+  --sidebar-ring: #8f1028;
 
-  --status-proposed: #8b90a0;
-  --status-approved: #008bc5;
-  --status-executing: #f0a500;
-  --status-executed: #2ecc71;
-  --status-rejected: #ff5d5d;
-  --status-failed: #ff5d5d;
-  --status-escalated: #c678dd;
+  /* Action-lineage statuses. Each also carries a text label in the UI; colour is never the only cue. */
+  --status-proposed: #565d6d;
+  --status-approved: #1f6feb;
+  --status-executing: #8a5300;
+  --status-executed: #146c43;
+  --status-rejected: #b3261e;
+  --status-failed: #b3261e;
+  --status-escalated: #6f42c1;
 }
 
 html,
@@ -74,10 +99,38 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
+  /* No webfont. A Databricks App is served behind the workspace proxy and a demo must not depend on a
+     font CDN resolving from a customer's network; the system stack is always there and always fast. */
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Keyboard focus, visibly. Most controls here are plain <button>s with bespoke classes and had no focus
+   treatment at all, which makes the app unusable without a mouse. Scoped to :focus-visible so a pointer
+   click never draws a ring. */
+:where(a, button, [role="button"], input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+/* Anyone who has asked the OS to reduce motion gets no pulsing rings or spinners in motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
