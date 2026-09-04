@@ -33,11 +33,15 @@ inspect:
 
 ## What it does
 
-**Ask** — one question, routed across three domain agents in parallel under a shared deadline, then fused
+Analysis, the live call and the letter corpus share **one chat thread** — one line of enquiry, so the
+account number carries between them instead of being retyped on another screen. The composer routes each
+message deterministically and every turn states which lane took it and why.
+
+**Analysis** — one question, routed across three domain agents in parallel under a shared deadline, then fused
 into one causal answer with a proposed next action. Routing is scored separately from answering, because a
 router miss and a Genie miss have different fixes.
 
-**Call assist** — live agent assist for a collections call. Speech-to-text runs **in the browser**, so no
+**Live call** — live agent assist for a collections call. Speech-to-text runs **in the browser**, so no
 customer audio leaves the device or reaches a model. The server resolves spoken account numbers (English,
 Hindi, Marathi — Devanagari script, Devanagari digit glyphs and Roman transliteration) and runs the RBI
 conduct controls *while the call is happening*: the 08:00–19:00 IST contact window, a grievance hold, NPA

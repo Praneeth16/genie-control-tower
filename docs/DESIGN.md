@@ -121,7 +121,7 @@ Two related defects, same root cause — a fact duplicated instead of derived:
   could be tagged as a vehicle loan in another city. It was visible in the call-assist HUD.
 - The letters were generated from a hardcoded list whose metadata had drifted from the data, so a letter
   describing one city's microfinance visit sat beside a record naming a different city and product — and the
-  Documents tab shows letter and record side by side.
+  The documents lane shows letter and record side by side.
 
 **A rollup table that was pure invention.** `sla_tracker` exists to keep common grievance questions off the
 raw complaint rows. It was generated with its own independent random numbers and disagreed violently with
@@ -150,7 +150,7 @@ spends its time on the part that needs governance: resolving what was said again
 caller's entitlements, and running the same conduct controls the action plane runs.
 
 Deliberately **not** Genie: a Genie message costs one of roughly five per minute for the entire workspace,
-and the HUD refreshes every few seconds. The lane uses narrow parameterised SQL. The typed Ask tab remains
+and the HUD refreshes every few seconds. The lane uses narrow parameterised SQL. The typed composer remains
 the path for open-ended questions — voice is never the only way to get an answer.
 
 Spoken account numbers resolve in English, Hindi and Marathi, in Devanagari script, Devanagari digit glyphs

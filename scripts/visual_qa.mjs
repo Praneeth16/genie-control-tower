@@ -43,6 +43,29 @@ async function clickTab(label) {
   await new Promise((r) => setTimeout(r, 900));
 }
 
+// The three lanes now share ONE thread, so text from an earlier turn stays in the DOM. Asserting
+// against document.body after that point is how a check passes without testing anything: waiting for
+// "LN001135" succeeds instantly if a previous turn already resolved it. Every phase below therefore
+// clears the thread first, which also exercises the clear button.
+async function clearThread() {
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim().startsWith("Clear thread"));
+    if (b) b.click();
+  });
+  await page.waitForFunction(
+    () => !/verified by unity_catalog:|score \d\.\d{3}/.test(document.body.innerText),
+    { timeout: 15000 });
+}
+
+async function chip(text) {
+  const ok = await page.evaluate((t) => {
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes(t));
+    if (b) { b.click(); return true; }
+    return false;
+  }, text);
+  if (!ok) throw new Error(`example chip '${text}' not found`);
+}
+
 async function shot(name, waitMs = 0) {
   if (waitMs) await new Promise((r) => setTimeout(r, waitMs));
   await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
@@ -61,16 +84,28 @@ console.log("document title:", title);
 if (!/Genie Control Tower/i.test(title)) {
   problems.push(`page title is not the app's own: ${title}`);
 }
+// Analysis, the live call and the letter corpus are ONE screen now. Assert the merge positively:
+// the three lanes must be gone from the nav, not merely present somewhere.
+const tabs = await page.evaluate(() =>
+  [...document.querySelectorAll("nav button")].map((b) => b.textContent.trim()));
+console.log("tabs:", JSON.stringify(tabs));
+const EXPECTED_TABS = ["Ask", "Dashboard", "Approvals", "Governance"];
+if (JSON.stringify(tabs) !== JSON.stringify(EXPECTED_TABS)) {
+  problems.push(`nav is ${JSON.stringify(tabs)}, expected ${JSON.stringify(EXPECTED_TABS)}`);
+}
+
 const askText = await shot("1-ask", 2500);
 console.log("header sample:", askText.split("\n").slice(0, 8).join(" | "));
+// The composer has to offer all three lanes from one place, or the merge only moved the seam.
+for (const marker of ["Start a call", "Auto", "Analysis", "Live call", "Documents",
+                      "Evaluate conduct at", "Call language"]) {
+  const present = askText.includes(marker);
+  console.log(`  composer control "${marker}":`, present ? "present" : "MISSING");
+  if (!present) problems.push(`composer is missing the ${marker} control`);
+}
 
-// Documents: semantic search first — the lane that Vector Search added.
-await clickTab("Documents");
-await page.evaluate(() => {
-  const b = [...document.querySelectorAll("button")].find((x) =>
-    x.textContent.includes("agent came after dark"));
-  if (b) b.click();
-});
+// Documents lane — reached from the composer, not a tab.
+await chip("agent came after dark");
 // Retrieval + a governed read-back of every hit; allow for a cold warehouse.
 await page.waitForFunction(
   () => /score \d\.\d{3}/.test(document.body.innerText), { timeout: 90000 });
@@ -86,12 +121,15 @@ if (!/re-read under YOUR entitlements/i.test(searchText)) {
 // Every hit must name an RBI ground, or the read-back silently failed.
 console.log("  hits carry RBI ground:", /Recovery agents|Mis-selling|Payment systems/.test(searchText));
 
-// Documents: open a real complaint file
-await page.evaluate(() => {
-  const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Open the file"));
-  if (b) b.click();
-});
-const docText = await shot("2-documents", 9000);
+// A complaint id in the message opens the record and the letter side by side. This is also the auto
+// router's docs branch: the chip forces no lane, the id decides it.
+await chip("Open CM0009245");
+await page.waitForFunction(
+  () => /ground \(RBI\)/.test(document.body.innerText), { timeout: 90000 });
+const docText = await shot("2-documents", 4000);
+const routedDocs = /complaint CM0009245 is named/.test(docText);
+console.log("  lane decision shown on the turn:", routedDocs);
+if (!routedDocs) problems.push("the turn does not state which lane took it or why");
 console.log("documents has letter text:", docText.includes("SYNTHETIC DOCUMENT"));
 console.log("documents shows record:", docText.includes("Recovery agents") || docText.includes("ground (RBI)"));
 
@@ -109,11 +147,8 @@ async function waitForHud(expectId) {
 // Drive the lane the way an operator will: load the sample call, let the HUD resolve, then flip the
 // clock to 21:45 IST and confirm the conduct banner actually CHANGES. A HUD that renders is not the
 // same as a HUD that is evaluating anything, and the whole point of this tab is the refusal.
-await clickTab("Call assist");
-await page.evaluate(() => {
-  const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Call that must stop"));
-  if (b) b.click();
-});
+await clearThread();
+await chip("Call that must stop");
 await waitForHud("LN001135");
 const voiceText = await shot("2-voice-current-clock", 500);
 console.log("  voice resolved account:", voiceText.includes("LN001135"));
@@ -161,10 +196,8 @@ if (/2[01]:00 IST/.test(lateText)) problems.push("voice: banner shows a fabricat
 // The compliant sample proves the HUD is not simply a red-light machine: with a current account and no
 // open grievance every control must CLEAR. A panel that can only fail is not evidence of anything.
 await setClock("in", "10:30 IST is inside");
-await page.evaluate(() => {
-  const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Call that may proceed"));
-  if (b) b.click();
-});
+await clearThread();
+await chip("Call that may proceed");
 await waitForHud("LN004703");
 const conductText = await shot("3b-voice-compliant", 500);
 const allClear = !/do not proceed with recovery/.test(conductText);
@@ -188,11 +221,11 @@ if (/attempts_90d|out_of_hours_90d|collected_90d/.test(conductText)) {
   problems.push("voice: contact history still labelled 90d, but the query applies no date filter");
 }
 
-// The Marathi sample proves the spoken-digit normaliser handles Devanagari, not only English.
-await page.evaluate(() => {
-  const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("मराठी"));
-  if (b) b.click();
-});
+// The Marathi sample proves the spoken-digit normaliser handles Devanagari, not only English. The
+// thread is cleared first: LN001135 was already on screen from the earlier turn, and waiting for a
+// string a previous turn put there is a check that cannot fail.
+await clearThread();
+await chip("मराठी");
 await waitForHud("LN001135");
 const mrText = await shot("3c-voice-marathi", 600);
 console.log("  Marathi transcript resolved LN001135:", mrText.includes("LN001135"));

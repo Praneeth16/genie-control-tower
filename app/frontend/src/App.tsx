@@ -10,27 +10,25 @@ import {
   BarChart3,
   Building2,
   ClipboardCheck,
-  FileText,
   MessageSquare,
-  Mic,
   ShieldCheck,
 } from "lucide-react";
 import { api, Health } from "./api";
 import { Page, SyntheticBadge } from "./components/kit";
-import { Ask } from "./components/Ask";
 import { Approvals } from "./components/Approvals";
-import { Documents } from "./components/Documents";
 import { Dashboard } from "./components/Dashboard";
 import { Governance } from "./components/Governance";
-import { Voice } from "./components/Voice";
+import { Chat } from "./components/chat/Chat";
 
-type Tab = "ask" | "voice" | "dashboard" | "documents" | "approvals" | "governance";
+type Tab = "ask" | "dashboard" | "approvals" | "governance";
 
+// Analysis, the live call and the letter corpus were three tabs and are now one thread on the Ask
+// screen: they are one line of enquiry, and making the user carry an account number between screens
+// was the seam. What stays a tab is what is genuinely a different surface — a dashboard, a queue of
+// pending decisions, and the governance evidence.
 const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
   { id: "ask", label: "Ask", icon: MessageSquare },
-  { id: "voice", label: "Call assist", icon: Mic },
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { id: "documents", label: "Documents", icon: FileText },
   { id: "approvals", label: "Approvals", icon: ClipboardCheck },
   { id: "governance", label: "Governance", icon: ShieldCheck },
 ];
@@ -63,8 +61,9 @@ export default function App() {
               </h1>
               <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
                 Three governed Genie Agents — Collections &amp; Recovery, Service &amp; Grievance, RM
-                Performance — under one supervisor. It answers across all three, then proposes an action
-                that a named human must approve and that the bank's own controls can refuse.
+                Performance — under one supervisor, in one thread with live call assist and the letter
+                corpus. It answers across all three, then proposes an action that a named human must
+                approve and that the bank's own controls can refuse.
               </p>
             </div>
             <div className="flex flex-col items-end gap-1.5">
@@ -137,10 +136,8 @@ export default function App() {
       </header>
 
       <Page>
-        {tab === "ask" && <Ask onActed={() => setRefreshKey((k) => k + 1)} />}
-        {tab === "voice" && <Voice />}
+        {tab === "ask" && <Chat onActed={() => setRefreshKey((k) => k + 1)} />}
         {tab === "dashboard" && <Dashboard />}
-        {tab === "documents" && <Documents onActed={() => setRefreshKey((k) => k + 1)} />}
         {tab === "approvals" && <Approvals refreshKey={refreshKey} />}
         {tab === "governance" && <Governance />}
       </Page>
