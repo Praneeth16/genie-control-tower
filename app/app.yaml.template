@@ -1,0 +1,92 @@
+# Databricks Apps manifest — TEMPLATE. Do not edit app.yaml directly; it is generated.
+#
+#   python3 scripts/render_app_yaml.py
+#
+# `databricks apps deploy --source-code-path` reads app.yaml FROM THE SOURCE PATH and does NOT apply
+# `resources.apps.<name>.config` from the bundle. Moving the env block into databricks.yml alone therefore
+# deployed an app with no configuration, which crashed on import. So the placeholders below are filled from
+# the same values the app resolves (.env locally, bundle variables in CI), and the generated app.yaml is
+# gitignored so no workspace's ids are ever committed.
+#
+# One process, one port: uvicorn serves BOTH the JSON API (/api/*) and the built React bundle (/).
+# Databricks Apps provides no second port.
+#
+# Auth model, which is the point of the project:
+#   * READS of business data run ON BEHALF OF THE USER. Apps forwards the signed-in user's token as
+#     X-Forwarded-Access-Token; the Genie legs bind to it, so Unity Catalog row filters and column masks
+#     apply per person from one shared agent.
+#   * GUARDRAIL VERIFICATION runs as the APP SERVICE PRINCIPAL, never OBO. A control that can be blinded
+#     by the caller's own row filters is not a control — see backend/action_plane/guardrails.py.
+#   * WRITES never come from generated SQL. They go through the approval state machine in Lakebase and
+#     UC-governed connectors, stamped with the human approver's identity.
+
+command:
+  - uvicorn
+  - main:app
+  - --app-dir
+  - "backend"
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "$DATABRICKS_APP_PORT"
+
+env:
+  - name: CT_CATALOG
+    value: "${CT_CATALOG}"
+  - name: CT_SCHEMA
+    value: "${CT_SCHEMA}"
+  - name: CT_VOLUME
+    value: "${CT_VOLUME}"
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: "${DATABRICKS_WAREHOUSE_ID}"
+  - name: DATABRICKS_CHAT_ENDPOINT
+    value: "${DATABRICKS_CHAT_ENDPOINT}"
+  - name: LAKEBASE_INSTANCE
+    value: "${LAKEBASE_INSTANCE}"
+  - name: LAKEBASE_DBNAME
+    value: "${LAKEBASE_DBNAME}"
+  - name: LAKEBASE_SCHEMA
+    value: "${LAKEBASE_SCHEMA}"
+  - name: COLLECTIONS_SPACE_ID
+    value: "${COLLECTIONS_SPACE_ID}"
+  - name: GRIEVANCE_SPACE_ID
+    value: "${GRIEVANCE_SPACE_ID}"
+  - name: RM_SPACE_ID
+    value: "${RM_SPACE_ID}"
+  - name: DASHBOARD_ID
+    value: "${DASHBOARD_ID}"
+  - name: VS_ENDPOINT
+    value: "${VS_ENDPOINT}"
+  - name: VS_INDEX
+    value: "${VS_INDEX}"
+  - name: CT_HTTP_CONNECTION
+    value: "${CT_HTTP_CONNECTION}"
+  - name: CT_MOCK_SYSTEMS_URL
+    value: "${CT_MOCK_SYSTEMS_URL}"
+
+  # The institution the generated correspondence is addressed from. The app writes draft replies on this
+  # letterhead, so leaving it at the default during a customer workshop produces a letter from the wrong
+  # bank. Governance naming and the pseudonym salt travel with it so the app's view matches the catalog's.
+  - name: BANK_NAME
+    value: "${BANK_NAME}"
+  - name: GROUP_PREFIX
+    value: "${GROUP_PREFIX}"
+  - name: PSEUDONYM_SALT
+    value: "${PSEUDONYM_SALT}"
+
+  # TRUE in a deployed app: a request arriving WITHOUT a forwarded user token is refused rather than
+  # served as the service principal. That fallback is a privilege escalation — it reads the whole book for
+  # a user entitled to one region, and produces a plausible answer rather than an error.
+  - name: REQUIRE_OBO
+    value: "true"
+
+  - name: MLFLOW_EXPERIMENT
+    value: "${MLFLOW_EXPERIMENT}"
+  # Belt and braces alongside the explicit set_tracking_uri in tracing.py: without these the Apps
+  # container resolves MLflow to a local SQLite file and disables tracing silently.
+  - name: MLFLOW_TRACKING_URI
+    value: "databricks"
+  - name: MLFLOW_REGISTRY_URI
+    value: "databricks-uc"
+  - name: TRACING_ENABLED
+    value: "true"

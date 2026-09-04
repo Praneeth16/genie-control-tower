@@ -1,0 +1,12 @@
+{"id":"RTE-01","grade":"routing","expected_domains":["COLLECTIONS","GRIEVANCE"],"question":"Why did customer complaints rise in Solapur microfinance around May 2026?"}
+{"id":"RTE-02","grade":"routing","expected_domains":["COLLECTIONS","RM"],"question":"Are our highest-earning relationship managers building portfolios that later go delinquent?"}
+{"id":"RTE-03","grade":"routing","expected_domains":["COLLECTIONS","GRIEVANCE"],"question":"Which recovery agencies are generating the most customer complaints about their conduct?"}
+{"id":"RTE-04","grade":"routing","expected_domains":["COLLECTIONS","GRIEVANCE"],"question":"Did the June 2026 UPI switch problem affect our ability to contact borrowers for collections?"}
+{"id":"RTE-05","grade":"routing","expected_domains":["GRIEVANCE","RM"],"question":"Is incentive pressure on relationship managers showing up as mis-selling complaints?"}
+{"id":"RTE-06","grade":"routing","expected_domains":["COLLECTIONS","GRIEVANCE","RM"],"question":"Give me the full risk picture for Solapur: delinquency, customer complaints and relationship manager performance."}
+{"id":"RTE-07","grade":"routing","expected_domains":["COLLECTIONS","GRIEVANCE"],"question":"Which branches have both high delinquency and high SLA breach rates?"}
+{"id":"RTE-08","grade":"routing","expected_domains":["GRIEVANCE","RM"],"question":"Do relationship managers with clawbacks have more complaints from their customers?"}
+{"id":"RTE-09","grade":"routing","expected_domains":["COLLECTIONS"],"question":"What is the bucket 2 roll-forward rate for microfinance?"}
+{"id":"RTE-10","grade":"routing","expected_domains":["GRIEVANCE"],"question":"How many complaints came through the RBI CMS channel last month?"}
+{"id":"RTE-11","grade":"routing","expected_domains":["RM"],"question":"Who are the top ten relationship managers by attainment?"}
+{"id":"RTE-12","grade":"routing","expected_domains":["COLLECTIONS","RM"],"question":"Are the branches with the worst commercial vehicle delinquency also the ones missing their CASA targets?"}

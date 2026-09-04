@@ -1,0 +1,28 @@
+# Local secrets and per-workspace ids
+.env
+# Generated from app.yaml.template by scripts/render_app_yaml.py; contains this workspace's ids.
+app/app.yaml
+.env.*
+!app/.env.example
+
+# Per-deployment bundle state and variable overrides (they carry workspace ids)
+.databricks/
+
+# Generated: recreated by the setup scripts, and workspace-specific
+genie/space_ids.json
+dashboards/control_tower.lvdash.json
+data/out/
+data/row_counts.json
+app/backend/row_counts.json
+eval/results/
+
+# Generated corpus — rebuilt from the warehouse by data/generate_documents.py
+data/documents/
+
+# Build output and dependencies
+node_modules/
+app/frontend/dist/
+app/frontend/tsconfig.tsbuildinfo
+__pycache__/
+*.pyc
+.venv/

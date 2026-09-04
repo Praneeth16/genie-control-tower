@@ -1,0 +1,83 @@
+@import "tailwindcss";
+@import "@databricks/appkit-ui/styles.css";
+
+/* Tailwind v4: treat .dark on <html> as the dark-variant trigger. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Genie Control Tower — Databricks AppKit DARK theme.
+ *
+ * A deep crimson leads as primary, which reads as a banking/collections context without reproducing
+ * any bank's brand identity: this is a Databricks demonstration ABOUT a bank's use cases, not a
+ * mock-up of any bank's product, and it should not be mistakable for one.
+ *
+ * Forced dark: the same tokens live in :root and .dark so the OS setting cannot flip it mid-demo.
+ */
+:root,
+.dark {
+  color-scheme: dark;
+  --radius: 0.625rem;
+
+  --background: oklch(0.178 0.013 270.6); /* #0f1117 */
+  --foreground: oklch(0.931 0.008 271.3); /* #e6e8ee */
+  --card: oklch(0.223 0.018 270.5); /* #181b24 panel */
+  --card-foreground: oklch(0.931 0.008 271.3);
+  --popover: oklch(0.223 0.018 270.5);
+  --popover-foreground: oklch(0.931 0.008 271.3);
+
+  --primary: oklch(0.55 0.175 18); /* deep crimson */
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.258 0.025 271.3); /* #1f2330 panel-2 */
+  --secondary-foreground: oklch(0.931 0.008 271.3);
+  --muted: oklch(0.258 0.025 271.3);
+  --muted-foreground: oklch(0.655 0.024 271.9); /* #8b90a0 */
+  --accent: oklch(0.258 0.025 271.3);
+  --accent-foreground: oklch(0.70 0.145 20); /* link crimson */
+
+  --destructive: oklch(0.692 0.198 23.8); /* #ff5d5d */
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.746 0.181 152.3); /* #2ecc71 */
+  --success-foreground: oklch(0.16 0.013 270.5);
+  --warning: oklch(0.775 0.163 76.2); /* #f0a500 */
+  --warning-foreground: oklch(0.16 0.013 270.5);
+
+  --border: oklch(0.306 0.026 269.5); /* #2a2f3d */
+  --input: oklch(0.306 0.026 269.5);
+  --ring: oklch(0.55 0.175 18); /* #008BC5 focus */
+
+  --chart-1: oklch(0.603 0.131 236.8); /* bright blue */
+  --chart-2: oklch(0.431 0.126 251.2); /* deep blue */
+  --chart-3: oklch(0.775 0.163 76.2); /* warning */
+  --chart-4: oklch(0.746 0.181 152.3); /* success */
+  --chart-5: oklch(0.694 0.164 318.2); /* violet */
+
+  --sidebar: oklch(0.223 0.018 270.5);
+  --sidebar-foreground: oklch(0.931 0.008 271.3);
+  --sidebar-primary: oklch(0.603 0.131 236.8);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.258 0.025 271.3);
+  --sidebar-accent-foreground: oklch(0.726 0.113 230.6);
+  --sidebar-border: oklch(0.306 0.026 269.5);
+  --sidebar-ring: oklch(0.603 0.131 236.8);
+
+  --status-proposed: #8b90a0;
+  --status-approved: #008bc5;
+  --status-executing: #f0a500;
+  --status-executed: #2ecc71;
+  --status-rejected: #ff5d5d;
+  --status-failed: #ff5d5d;
+  --status-escalated: #c678dd;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+}

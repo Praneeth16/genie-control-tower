@@ -1,0 +1,16 @@
+# Mock downstream bank systems for the control tower demo.
+#
+# These stand in for the systems a real action would land in — field operations, complaint
+# management, HRMS, correspondence, core banking. They exist so the Action Plane can demonstrate a
+# genuine outbound call over a governed path (a Unity Catalog HTTP connection) without touching a
+# production system, and so the audit trail carries a real external reference id.
+#
+# Every response is deterministic and every call is echoed back, so a demo can show exactly what was
+# sent to which system.
+command:
+  - uvicorn
+  - main:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "$DATABRICKS_APP_PORT"

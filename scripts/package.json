@@ -1,0 +1,7 @@
+{
+  "name": "genie-control-tower-control-tower-qa",
+  "private": true,
+  "type": "module",
+  "description": "Browser-driven QA harnesses. Kept out of app/frontend on purpose: puppeteer is test tooling, not an app dependency, and vendoring it there put a 200MB browser download in the deployed bundle's dependency tree. Node resolves an ESM import from the importing FILE's directory upward, so these scripts need a node_modules beside them, not one beside the app.",
+  "devDependencies": { "puppeteer-core": "^25.9.0" }
+}
