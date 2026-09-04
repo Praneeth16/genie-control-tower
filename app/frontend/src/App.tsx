@@ -138,7 +138,13 @@ export default function App() {
       </header>
 
       <Page>
-        {tab === "ask" && <Chat onActed={() => setRefreshKey((k) => k + 1)} />}
+        {/* Ask stays MOUNTED and is hidden instead of unmounted. Conditional mounting threw the whole
+            thread away on any tab change — and the flow this app documents sends you to Approvals to
+            decide the action a turn just staged, then back. Coming back to an empty thread destroys the
+            premise that the account number carries between the lanes. */}
+        <div hidden={tab !== "ask"}>
+          <Chat onActed={() => setRefreshKey((k) => k + 1)} />
+        </div>
         {tab === "dashboard" && <Dashboard />}
         {tab === "approvals" && <Approvals refreshKey={refreshKey} />}
         {tab === "governance" && <Governance />}

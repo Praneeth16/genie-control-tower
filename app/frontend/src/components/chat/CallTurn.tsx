@@ -12,26 +12,39 @@ import { Card, CardContent } from "@databricks/appkit-ui/react";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { ShieldCheck } from "lucide-react";
 import type { VoiceAssist } from "../../api";
-import { RowTable, SectionTitle, Stat } from "../kit";
+import { ErrorText, RowTable, SectionTitle, Stat } from "../kit";
 import { RULE_LABEL } from "../Guardrails";
 
 export function CallTurn({
   assist,
   live,
   pending,
+  error,
 }: {
   assist: VoiceAssist | null;
   live: boolean;
   pending: boolean;
+  error: string | null;
 }) {
   if (!assist) {
+    // Three distinct states, and the third one is the point. "Resolving…" used to be shown for ALL of
+    // them, so a call that ended with nothing said, a refused microphone, or a failed lookup all left a
+    // spinner that could never resolve — the UI claiming work was in progress when none was.
+    const message = pending
+      ? "Resolving the call against governed tables…"
+      : live
+        ? "Listening — the conduct verdict appears as soon as an account is named."
+        : error
+          ? "The lookup failed, so no conduct verdict was reached on this call."
+          : "This call ended before an account was named, so nothing was resolved and no conduct verdict applies.";
     return (
-      <Card className="border-border">
-        <CardContent className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {live
-            ? "Listening — the conduct verdict appears as soon as an account is named."
-            : "Resolving the call against governed tables…"}
+      <Card className={error ? "border-destructive/40" : "border-border"}>
+        <CardContent className="space-y-2 p-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {(pending || live) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {message}
+          </div>
+          {error && <ErrorText>{error}</ErrorText>}
         </CardContent>
       </Card>
     );
@@ -55,6 +68,10 @@ export function CallTurn({
             )}
             {pending && <Loader2 className="mb-3 h-3 w-3 animate-spin text-muted-foreground" />}
           </div>
+
+          {/* A verdict is only meaningful next to the words it was computed from. Without this, a refresh
+              that failed or was superseded leaves a stale banner that looks current. */}
+          {error && <ErrorText>{error}</ErrorText>}
 
           <div className="space-y-2">
             {(assist.conduct || []).map((c) => (

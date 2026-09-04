@@ -330,7 +330,13 @@ export function AskTurn({ result, onActed }: { result: AskResult; onActed: () =>
                       {fmtIST(new Date(scheduledAt).toISOString(), false)} ·{" "}
                     </span>
                   )}
-                  Try an evening time to see the RBI contact-window control refuse it.
+                  {/* CONDITIONAL, because the borrower-contact window is attached to
+                      schedule_field_visit alone — a coaching case at 21:45 is not a borrower contact, so
+                      the control does not apply. This line promised a refusal for every action type, so a
+                      presenter could set an evening time, watch it pass, and have no idea why. */}
+                  {result.action_draft.action_type === "schedule_field_visit"
+                    ? "Try an evening time to see the RBI contact-window control refuse it."
+                    : `The RBI borrower-contact window governs schedule_field_visit only, so an evening time is not refused for ${result.action_draft.action_type} — it is not a borrower contact.`}
                 </div>
               </div>
             </div>

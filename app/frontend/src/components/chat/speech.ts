@@ -63,7 +63,10 @@ export function useSpeechRecognition({
     r.onresult = (e) => {
       let finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
+        // Guard the alternative index: a result with no alternatives would otherwise throw inside the
+        // event handler and lose the phrase silently.
+        const alt = e.results[i].isFinal ? e.results[i][0] : undefined;
+        if (alt?.transcript) finalText += alt.transcript + " ";
       }
       if (finalText) sink.current(finalText.trim());
     };
@@ -74,7 +77,17 @@ export function useSpeechRecognition({
     r.onend = () => setListening(false);
     rec.current = r;
     setError(null);
-    r.start();
+    // `start()` throws synchronously on a non-secure origin and with InvalidStateError if a recogniser is
+    // already running. Uncaught, that propagated out of a React event handler after the caller had already
+    // committed state for a call that never began.
+    try {
+      r.start();
+    } catch (e) {
+      rec.current = null;
+      setError(`could not start the microphone: ${e instanceof Error ? e.message : String(e)}`);
+      setListening(false);
+      return;
+    }
     setListening(true);
   }, [locale]);
 

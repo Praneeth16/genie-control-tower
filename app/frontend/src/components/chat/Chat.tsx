@@ -76,7 +76,7 @@ type Turn =
   | { id: number; kind: "user"; text: string; lane: Lane; reason: string }
   | { id: number; kind: "pending"; lane: Lane }
   | { id: number; kind: "ask"; result: AskResult }
-  | { id: number; kind: "call"; transcript: string; assist: VoiceAssist | null; live: boolean }
+  | { id: number; kind: "call"; transcript: string; assist: VoiceAssist | null; live: boolean; error: string | null }
   | { id: number; kind: "search"; hits: SearchResult }
   | { id: number; kind: "evidence"; evidence: Evidence }
   | { id: number; kind: "error"; text: string };
@@ -107,6 +107,20 @@ const EXAMPLES: { lane: Lane; label: string; text: string; title?: string; force
     lane: "ask",
     label: "Agents contacting borrowers outside permitted hours",
     text: "Which recovery agents are contacting borrowers outside permitted hours?",
+  },
+  {
+    // The refusal moment needs a draft of `schedule_field_visit`, the ONLY action type the RBI
+    // borrower-contact window is attached to (see action_policies). The fuser picks the action type from a
+    // menu based on the evidence, so a question about AGENT conduct draws a coaching case and the refusal
+    // cannot fire at all. This one is about a delinquent BORROWER and names the visit.
+    lane: "ask",
+    label: "Most delinquent Solapur borrowers — schedule a visit?",
+    title:
+      "Use this one for the refusal moment: it drafts schedule_field_visit, which is the action type the " +
+      "RBI borrower-contact window governs.",
+    text:
+      "Which Solapur microfinance borrowers are the most delinquent, and should we schedule a recovery " +
+      "field visit for the worst one?",
   },
   {
     lane: "call",
@@ -185,11 +199,19 @@ export function Chat({ onActed }: { onActed: () => void }) {
 
   const [live, setLive] = useState<{ userId: number; callId: number } | null>(null);
   const [liveTranscript, setLiveTranscript] = useState("");
-  const [pendingCallId, setPendingCallId] = useState<number | null>(null);
+  const [pendingCalls, setPendingCalls] = useState<ReadonlySet<number>>(() => new Set());
 
   const seq = useRef(0);
   const nextId = () => ++seq.current;
-  const inflight = useRef(false);
+  /** Per-turn request generation. Two evaluations of the SAME turn can be in flight — the presenter
+   *  toggles the clock twice, or speaks again mid-lookup — and `setTurns` applies them in COMPLETION
+   *  order, not issue order. Without this a superseded reply can land last and leave a verdict on screen
+   *  that contradicts the selector above it. */
+  const reqSeq = useRef(new Map<number, number>());
+  /** Set when the mic button was pressed, cleared once the recogniser actually starts. The live turn is
+   *  created from that transition rather than from the click, so a refused microphone or a synchronous
+   *  throw out of `start()` leaves no orphan turn behind. */
+  const wantLive = useRef(false);
   /** Which turn to bring into view. The composer is above the thread, so a new turn appears BELOW the
    *  fold once a few are stacked up; scrolling to the page bottom instead would land on the end of a long
    *  answer rather than the start of the new one. */
@@ -203,6 +225,41 @@ export function Chat({ onActed }: { onActed: () => void }) {
     const d = new Date();
     return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, m, 0) / 1000);
   }, [clock]);
+
+  /** The only place a call turn is evaluated. Live speech, the flush when the mic stops, a clock change
+   *  and a typed call all route through here so they cannot disagree about ordering or error handling. */
+  const evaluateCall = useCallback(
+    async (callId: number, transcript: string) => {
+      if (!transcript.trim()) return;
+      const mine = (reqSeq.current.get(callId) ?? 0) + 1;
+      reqSeq.current.set(callId, mine);
+      setPendingCalls((p) => new Set(p).add(callId));
+      try {
+        const assist = await voiceApi.assist(transcript, callAt());
+        if (reqSeq.current.get(callId) !== mine) return;   // superseded; discard
+        setTurns((ts) =>
+          ts.map((t) =>
+            t.id === callId && t.kind === "call" ? { ...t, assist, transcript, error: null } : t
+          )
+        );
+      } catch (e) {
+        if (reqSeq.current.get(callId) !== mine) return;
+        const msg = e instanceof Error ? e.message : String(e);
+        // On the TURN. A banner at the foot of the thread is below the fold once a few turns stack up,
+        // so a failed refresh used to leave a stale verdict looking settled and current.
+        setTurns((ts) =>
+          ts.map((t) => (t.id === callId && t.kind === "call" ? { ...t, error: msg } : t))
+        );
+      } finally {
+        setPendingCalls((p) => {
+          const n = new Set(p);
+          n.delete(callId);
+          return n;
+        });
+      }
+    },
+    [callAt]
+  );
 
   const speech = useSpeechRecognition({
     locale,
@@ -235,13 +292,18 @@ export function Chat({ onActed }: { onActed: () => void }) {
       if (lane === "ask") {
         replace(pendingId, { id: pendingId, kind: "ask", result: await api.ask(text) });
       } else if (lane === "call") {
+        // The turn is placed BEFORE the lookup runs. Previously the lookup was awaited first, so a clock
+        // change while it was in flight found no call turn to re-evaluate, advanced its marker, and left
+        // a verdict computed against the old clock sitting under a selector that said otherwise.
         replace(pendingId, {
           id: pendingId,
           kind: "call",
           transcript: text,
-          assist: await voiceApi.assist(text, callAt()),
+          assist: null,
           live: false,
+          error: null,
         });
+        await evaluateCall(pendingId, text);
       } else {
         const cm = text.match(COMPLAINT_ID);
         if (cm) {
@@ -274,31 +336,46 @@ export function Chat({ onActed }: { onActed: () => void }) {
       speech.toggle();
       return;
     }
-    // Open the live pair up front so the HUD has somewhere to land the moment an account is heard.
-    const userId = nextId();
-    const callId = nextId();
-    setLiveTranscript("");
-    setTurns((ts) => [
-      ...ts,
-      { id: userId, kind: "user", text: "Listening…", lane: "call", reason: "spoken into the microphone" },
-      { id: callId, kind: "call", transcript: "", assist: null, live: true },
-    ]);
-    setLive({ userId, callId });
-    setScrollTo(userId);
+    wantLive.current = true;
     setErr(null);
+    setLiveTranscript("");
     speech.toggle();
   }
 
+  // The live pair is opened when the recogniser REPORTS that it started, not when the button was clicked.
+  // Creating it on the click left an unresolvable turn behind whenever the microphone was refused or
+  // `start()` threw synchronously: nothing ever evaluated it and it span forever.
+  useEffect(() => {
+    if (!speech.listening || live || !wantLive.current) return;
+    wantLive.current = false;
+    const userId = nextId();
+    const callId = nextId();
+    setTurns((ts) => [
+      ...ts,
+      { id: userId, kind: "user", text: "Listening…", lane: "call", reason: "spoken into the microphone" },
+      { id: callId, kind: "call", transcript: "", assist: null, live: true, error: null },
+    ]);
+    setLive({ userId, callId });
+    setScrollTo(userId);
+  }, [speech.listening, live]);
+
   // Freeze the live turn whenever the recogniser stops — including when it ends on its own or errors,
   // which is why this watches `listening` rather than living in the click handler.
+  //
+  // AND FLUSH. The debounced loop below is torn down the instant `live` goes null, so stopping the mic
+  // within the debounce window used to discard the pending evaluation entirely: no request was ever sent,
+  // and the turn froze on a spinner that could never resolve. Chrome also fires `onend` by itself on a
+  // trailing pause, so this is the common path, not an edge case.
   useEffect(() => {
     if (speech.listening || !live) return;
     const { callId } = live;
+    const finalText = liveTranscript;
     setTurns((ts) =>
       ts.map((t) => (t.id === callId && t.kind === "call" ? { ...t, live: false } : t))
     );
     setLive(null);
-  }, [speech.listening, live]);
+    if (finalText.trim()) void evaluateCall(callId, finalText);
+  }, [speech.listening, live, liveTranscript, evaluateCall]);
 
   // The transcript IS the user's message on this lane, so it updates without waiting for the lookup.
   useEffect(() => {
@@ -311,70 +388,35 @@ export function Chat({ onActed }: { onActed: () => void }) {
     );
   }, [liveTranscript, live]);
 
-  // Refresh the HUD as the transcript grows, but never more than once every 1.5s and never while a
-  // request is already in flight. Firing per word would put the warehouse behind the conversation.
+  // Refresh the HUD as the transcript grows, at most once every 1.5s. Firing per word would put the
+  // warehouse behind the conversation.
   //
-  // When a request IS in flight the attempt is RETRIED, not dropped. Dropping it silently lost the last
-  // thing the caller said: an assist call can take seconds (16s once, see visual_qa.mjs), so a phrase
-  // arriving mid-flight armed a timer that fired and gave up, and if the speaker then stopped talking
-  // nothing re-armed it. The frozen turn kept a verdict computed from the shorter transcript — with the
-  // complaint id missing, the grievance hold never fires and the HUD shows a call as clear that is not.
+  // No in-flight gate any more. It used to skip an evaluation whose predecessor was still running and
+  // simply give up, which lost the last thing said; correctness now comes from the generation token in
+  // evaluateCall, so an overlapping request is safe — the stale reply is discarded rather than dropped.
   useEffect(() => {
     if (!live || !liveTranscript.trim()) return;
     const { callId } = live;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const run = async () => {
-      if (cancelled) return;
-      if (inflight.current) {
-        timer = setTimeout(run, 400);
-        return;
-      }
-      inflight.current = true;
-      setPendingCallId(callId);
-      try {
-        const assist = await voiceApi.assist(liveTranscript, callAt());
-        setTurns((ts) =>
-          ts.map((t) =>
-            t.id === callId && t.kind === "call" ? { ...t, assist, transcript: liveTranscript } : t
-          )
-        );
-        setErr(null);
-      } catch (e) {
-        setErr(e instanceof Error ? e.message : String(e));
-      } finally {
-        inflight.current = false;
-        setPendingCallId(null);
-      }
-    };
-    timer = setTimeout(run, 1500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [liveTranscript, live, callAt]);
+    const timer = setTimeout(() => void evaluateCall(callId, liveTranscript), 1500);
+    return () => clearTimeout(timer);
+  }, [liveTranscript, live, evaluateCall])
 
   // Changing the clock has to move the verdict on the call ALREADY on screen. In the tabbed version this
   // fell out of the lookup depending on the clock; in a thread the turn is finished, so the re-evaluation
   // has to be explicit. Without it the presenter flips to 21:45 IST and the banner keeps the old answer,
   // which is the single worst thing this screen could do.
+  //
+  // EVERY call turn carrying a transcript is re-evaluated, not just the newest. Two calls on screen
+  // evaluated against different clocks, with nothing to tell them apart, is worse than one stale verdict.
+  // An empty frozen turn (mic started, nothing said) used to shadow the real one and block the refresh.
   const prevClock = useRef(clock);
   useEffect(() => {
     if (prevClock.current === clock) return;
     prevClock.current = clock;
-    if (live) return;                       // the live loop re-evaluates on its own
-    const last = [...turns].reverse().find((t) => t.kind === "call");
-    if (!last || last.kind !== "call" || !last.transcript.trim()) return;
-    const { id, transcript } = last;
-    setPendingCallId(id);
-    voiceApi
-      .assist(transcript, callAt())
-      .then((assist) =>
-        setTurns((ts) => ts.map((t) => (t.id === id && t.kind === "call" ? { ...t, assist } : t)))
-      )
-      .catch((e) => setErr(e instanceof Error ? e.message : String(e)))
-      .finally(() => setPendingCallId(null));
-  }, [clock, live, turns, callAt]);
+    for (const t of turns) {
+      if (t.kind === "call" && t.transcript.trim()) void evaluateCall(t.id, t.transcript);
+    }
+  }, [clock, turns, evaluateCall]);
 
   useEffect(() => {
     if (speech.error) setErr(speech.error);
@@ -584,6 +626,8 @@ export function Chat({ onActed }: { onActed: () => void }) {
               <select
                 aria-label="Recogniser language"
                 value={locale}
+                disabled={speech.listening}
+                title={speech.listening ? "Stop the call to change the recogniser language." : undefined}
                 onChange={(e) => setLocale(e.target.value)}
                 className="rounded border border-border bg-background px-1.5 py-1 text-[12px] text-foreground"
               >
@@ -618,7 +662,7 @@ export function Chat({ onActed }: { onActed: () => void }) {
         <div key={t.id} data-turn={t.id}>
           <TurnView
             turn={t}
-            pendingCallId={pendingCallId}
+            pending={pendingCalls.has(t.id)}
             onActed={onActed}
             onOpenComplaint={openComplaint}
             onRerun={(text, lane) => void send(text, lane)}
@@ -634,13 +678,13 @@ export function Chat({ onActed }: { onActed: () => void }) {
 
 function TurnView({
   turn,
-  pendingCallId,
+  pending,
   onActed,
   onOpenComplaint,
   onRerun,
 }: {
   turn: Turn;
-  pendingCallId: number | null;
+  pending: boolean;
   onActed: () => void;
   onOpenComplaint: (id: string) => void;
   onRerun: (text: string, lane: Lane) => void;
@@ -691,7 +735,9 @@ function TurnView({
   if (turn.kind === "error") return <ErrorText>{turn.text}</ErrorText>;
   if (turn.kind === "ask") return <AskTurn result={turn.result} onActed={onActed} />;
   if (turn.kind === "call")
-    return <CallTurn assist={turn.assist} live={turn.live} pending={pendingCallId === turn.id} />;
+    return (
+      <CallTurn assist={turn.assist} live={turn.live} pending={pending} error={turn.error} />
+    );
   if (turn.kind === "search")
     return <SearchTurn hits={turn.hits} onOpenComplaint={onOpenComplaint} />;
   return <EvidenceTurn evidence={turn.evidence} onActed={onActed} />;

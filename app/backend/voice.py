@@ -223,7 +223,18 @@ def _conduct(loan: dict | None, grievance: dict, epoch_seconds: int | None) -> l
     row filters would be theatre.
     """
     checks: list[dict[str, Any]] = []
-    verified = guardrails.assert_not_blinded()
+    # Caught, exactly as governance.py does it. Unguarded, a raise here — the UC function briefly
+    # unavailable, a warehouse hiccup — turned every /api/voice/assist into a 500 and took the WHOLE live
+    # HUD down mid-call, including the RBI hours, grievance and NPA verdicts that had nothing to do with
+    # it. It also made the `blinded` branch below unreachable. Still fail-closed: a check that could not
+    # be verified reports blinded, so guardrail_integrity comes back FAILED with the reason attached,
+    # which is the honest outcome rather than a silent pass or a dead panel.
+    try:
+        verified = guardrails.assert_not_blinded()
+    except guardrails.GuardrailsBlinded as e:
+        verified = {"blinded": True, "error": str(e)}
+    except Exception as e:                      # noqa: BLE001 - never let this kill the conduct panel
+        verified = {"blinded": True, "error": f"could not verify guardrail visibility: {e}"}
     if epoch_seconds is not None:
         try:
             # `ist_hour` returns the HOUR ONLY. Rendering it as "{hr}:00" printed a 21:45 call as
@@ -271,6 +282,8 @@ def _conduct(loan: dict | None, grievance: dict, epoch_seconds: int | None) -> l
     # banner that failed to run.
     seen = verified.get("visible") or {}
     counted = ", ".join(f"{k} {v}" for k, v in sorted(seen.items())) or "nothing counted"
+    if verified.get("error"):
+        counted = str(verified["error"])[:200]
     return checks + [{"rule": "guardrail_integrity", "passed": not verified.get("blinded", True),
                       "detail": f"guardrail identity sees the whole book ({counted})",
                       "verified_by": "unity_catalog:guardrail_visibility"}]

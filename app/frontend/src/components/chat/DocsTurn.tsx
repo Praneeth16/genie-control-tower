@@ -36,9 +36,11 @@ export function SearchTurn({
         </SectionTitle>
         <p className="text-[12px] leading-relaxed text-muted-foreground">{hits.note}</p>
         <div className="space-y-2">
-          {hits.hits.map((h) => (
+          {hits.hits.map((h, i) => (
             <div
-              key={h.complaint_id ?? h.snippet.slice(0, 20)}
+              // Index-suffixed: policy documents carry no complaint_id, so two of them sharing a snippet
+              // prefix produced duplicate keys and React reused the wrong node.
+              key={`${h.complaint_id ?? "doc"}-${i}`}
               className={
                 "rounded border px-3 py-2 " +
                 (h.outside_your_scope

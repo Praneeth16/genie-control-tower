@@ -9,6 +9,12 @@ const page = await browser.newPage();
 // guard was documented but never actually written into this script.
 await page.setCacheEnabled(false);
 
+// Requests the embedded dashboard makes to the workspace UI are EXPECTED to fail here: this Chrome
+// runs on a throwaway profile with no Databricks session, so /telemetry and /ui-flags return 401.
+// Those are the iframe's own calls, not the app's, and counting them as defects would train everyone
+// to ignore this list.
+const EXPECTED_UNAUTH = /\/(telemetry(-unauth)?|ui-flags|config)\b/;
+
 const problems = [];
 // Same reasoning for console noise emitted by the embedded dashboard's own bundle.
 const EXPECTED_CONSOLE = /safex|local override for deploymentMode|gocx|confx|telemetry-unauth/i;
@@ -20,13 +26,15 @@ page.on("console", (m) => {
 page.on("pageerror", (e) => problems.push(`pageerror: ${String(e).slice(0, 300)}`));
 page.on("requestfailed", (r) => {
   if (!r.url().startsWith(BASE) && EXPECTED_UNAUTH.test(r.url())) return;
-  problems.push(`requestfailed: ${r.url().slice(0, 140)} ${r.failure()?.errorText}`);
+  // Third-party assets CANCELLED by teardown. The embedded dashboard's iframe is unmounted when the tab
+  // changes, which aborts whatever workspace UI chunks it still had in flight. Measured: 17 such aborts
+  // on one run and none on the next two, from the same build — entirely outside this application. A gate
+  // that goes red at random is a gate people learn to ignore, which is the failure mode the comment above
+  // is already guarding against. Anything from our OWN origin, and any non-abort failure, still counts.
+  const why = r.failure()?.errorText ?? "";
+  if (!r.url().startsWith(BASE) && /ERR_ABORTED/.test(why)) return;
+  problems.push(`requestfailed: ${r.url().slice(0, 140)} ${why}`);
 });
-// Requests the embedded dashboard makes to the workspace UI are EXPECTED to fail here: this Chrome
-// runs on a throwaway profile with no Databricks session, so /telemetry and /ui-flags return 401.
-// Those are the iframe's own calls, not the app's, and counting them as defects would train everyone
-// to ignore this list.
-const EXPECTED_UNAUTH = /\/(telemetry(-unauth)?|ui-flags|config)\b/;
 page.on("response", (r) => {
   if (r.status() < 400) return;
   if (r.status() === 401 && !r.url().startsWith(BASE) && EXPECTED_UNAUTH.test(r.url())) return;

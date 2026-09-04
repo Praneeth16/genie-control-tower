@@ -201,7 +201,8 @@ export interface Usage {
 // --- semantic search over the letter corpus --------------------------------
 export interface SearchHit {
   complaint_id: string | null;
-  document_type: string;
+  /** Null on a hit the caller may not read: the index found it, the record was withheld. */
+  document_type: string | null;
   rbi_ground: string | null;
   city: string | null;
   score: number;
@@ -227,9 +228,22 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(body.detail || `Request failed: ${res.status}`);
+    // FastAPI validation errors put an ARRAY in `detail`; passing that to Error() yields a comma-joined
+    // blob, so it is formatted rather than stringified by accident.
+    const detail = Array.isArray(body.detail)
+      ? body.detail.map((d: { msg?: string }) => d?.msg ?? JSON.stringify(d)).join("; ")
+      : body.detail;
+    throw new Error(detail || `Request failed: ${res.status}`);
   }
-  return res.json();
+  // A 200 is not a promise of JSON. When a Databricks App's OAuth session lapses the auth proxy answers
+  // 200 with an HTML login page, and the raw parser message ("Unexpected token '<'") tells the operator
+  // nothing about what actually happened.
+  return res.json().catch(() => {
+    throw new Error(
+      `${url} returned a non-JSON response. If this is the deployed app your workspace session has ` +
+      `probably expired — reload the page to sign in again.`
+    );
+  });
 }
 
 function post<T>(url: string, body?: unknown): Promise<T> {
@@ -283,8 +297,10 @@ export const api = {
   evidence: (complaintId: string) => req<Evidence>(`/api/documents/evidence/${complaintId}`),
   draft: (complaintId: string) => post<Draft>(`/api/documents/draft/${complaintId}`),
   search: (query: string, limit = 8) => post<SearchResult>("/api/documents/search", { query, limit }),
+  // `outbound_path` is absent when the volume listing itself failed, so it is optional here rather
+  // than a lie the compiler believes.
   outbound: () =>
-    req<{ documents: { name: string; path: string; size: number }[]; outbound_path: string }>(
+    req<{ documents: { name: string; path: string; size: number }[]; outbound_path?: string }>(
       "/api/documents/outbound"
     ),
 };
