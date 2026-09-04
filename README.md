@@ -199,6 +199,30 @@ curl -s -H "Authorization: Bearer $(databricks auth token -p <name> | jq -r .acc
 Expect `"obo_active": true` and `"require_obo": true`. If `obo_active` is false, per-user filtering is
 **not** in effect and you are seeing everything — stop and fix it before trusting a demo.
 
+### 6. Allow the app to embed the dashboard
+
+AI/BI dashboard embedding is **denied by default** on a new workspace, and the Dashboard tab then shows
+"Embedding dashboards is not available in this workspace" no matter who is signed in. A workspace admin
+sets the policy first, then the approved domain, because the domain list is rejected while the policy is
+anything other than `ALLOW_APPROVED_DOMAINS`:
+
+```bash
+databricks settings aibi-dashboard-embedding-access-policy update --json '{
+  "allow_missing": true,
+  "setting": {"setting_name": "default",
+              "aibi_dashboard_embedding_access_policy": {"access_policy_type": "ALLOW_APPROVED_DOMAINS"}},
+  "field_mask": "aibi_dashboard_embedding_access_policy.access_policy_type"}'
+
+databricks settings aibi-dashboard-embedding-approved-domains update --json '{
+  "allow_missing": true,
+  "setting": {"setting_name": "default",
+              "aibi_dashboard_embedding_approved_domains": {"approved_domains": ["<your-app-host>"]}},
+  "field_mask": "aibi_dashboard_embedding_approved_domains.approved_domains"}'
+```
+
+Use `ALLOW_APPROVED_DOMAINS` with your app's hostname rather than `ALLOW_ALL_DOMAINS`, so only this app
+can frame your dashboards. Read the values back with the matching `get` commands.
+
 ---
 
 ## Configuration

@@ -70,10 +70,19 @@ export function Dashboard() {
         className="h-[calc(100vh-15rem)] min-h-[38rem] w-full rounded-lg border border-border bg-card"
       />
 
-      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-        If the frame is blank, open the dashboard in the workspace once to establish the session — the
-        embed carries your browser session and cannot mint one of its own.
-      </p>
+      <div className="mt-2 space-y-1 text-[12px] leading-relaxed text-muted-foreground">
+        {/* Two DIFFERENT causes look identical here, and the note used to describe only the second one.
+            The first is a workspace security setting and no amount of signing in will fix it. */}
+        <p>
+          If the frame says embedding is not available in this workspace, a workspace admin must set the
+          AI/BI dashboard embedding policy to <code>ALLOW_APPROVED_DOMAINS</code> and add this app's
+          hostname to the approved domains. Embedding is denied by default on a new workspace.
+        </p>
+        <p>
+          If the frame is simply blank, open the dashboard in the workspace once to establish the session.
+          The embed carries your browser session and cannot create one of its own.
+        </p>
+      </div>
     </div>
   );
 }
