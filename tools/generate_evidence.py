@@ -449,8 +449,55 @@ def ev10(ctx: Ctx) -> None:
           + table(["route", "HTTP", "response (start)"], rows))
 
 
+def evhl(ctx: Ctx) -> None:
+    import re
+    f = ctx.fq
+    one = lambda sql: ctx.sql(sql)[1][0]
+    acc, out, held, flags, reassign, month = one(f"""SELECT count(*), round(sum(outstanding_principal)), count_if(open_grievance),
+        count_if(size(conduct_flags) > 0), count_if(recommended_treatment LIKE 'Reassign%'), max(snapshot_month)
+        FROM {f}.collections_priority""")
+    files, ok = one(f"SELECT count(*), count_if(status = 'RECONCILED') FROM {f}.recon_completeness")
+    caught = one(f"SELECT sum(row_count) FROM {f}.data_quality_summary")[0]
+    ooh, contacts = one(f"SELECT count_if(NOT within_rbi_hours), count(*) FROM {f}.collections_activity")
+    gnpa, rf = one(f"""WITH m AS (SELECT max(snapshot_month) AS m FROM {f}.delinquency_monthly)
+        SELECT round(100 * sum(CASE WHEN is_npa THEN outstanding_principal END) / sum(outstanding_principal), 2),
+               round(100 * avg(CASE WHEN roll_direction = 'forward' THEN 1 ELSE 0 END), 1)
+        FROM {f}.delinquency_monthly d JOIN m ON d.snapshot_month = m.m""")
+    letters, alleged = one(f"SELECT count(*), count_if(alleges_conduct_breach) FROM {f}.complaint_ai_triage")
+
+    def metric(component, version, name, judge="j2"):
+        cols, rows = ctx.sql(f"""SELECT round(100 * value, 1) FROM {f}.ai_eval_summary WHERE component = '{component}'
+            AND prompt_version = '{version}' AND metric = '{name}' AND coalesce(judge_version, 'j1') = '{judge}'
+            ORDER BY evaluated_at LIMIT 1""")
+        return rows[0][0] if rows else "n/a"
+    genie = open(os.path.join(OUT, "08_genie.md")).read() if os.path.exists(os.path.join(OUT, "08_genie.md")) else ""
+    g = re.findall(r"## (Benchmark questions|Held-out questions[^:]*): (\d+) of (\d+) graded passed \(([\d.]+)%\)", genie)
+    crore = float(out) / 1e7
+    rows = [
+        ["Accounts on the collections worklist", f"{int(acc):,} (month end {month})", "03"],
+        ["Outstanding on the worklist", f"INR {crore:,.1f} crore", "03"],
+        ["Accounts held because the borrower's grievance is open", f"{int(held):,}", "03"],
+        ["Accounts with a conduct flag", f"{int(flags):,}, of which {int(reassign):,} are moved to a certified agency", "03"],
+        ["Contacts outside 08:00 to 19:00 IST", f"{int(ooh):,} of {int(contacts):,} ({100 * int(ooh) / int(contacts):.1f}%)", "03"],
+        ["Gross NPA, latest month", f"{gnpa}%", "03"],
+        ["Roll-forward rate, latest month", f"{rf}%", "03"],
+        ["Source files reconciled to their senders' manifests", f"{int(ok)} of {int(files)}", "02"],
+        ["Rows caught by quality rules, each kept with its reason", f"{int(caught):,}", "02"],
+        ["Letters triaged by AI in the pipeline", f"{int(letters):,}, of which {int(alleged):,} allege agent misconduct", "04"],
+        ["Letter triage agreement with the recorded ground", f"{metric('letter_triage', 'v1', 'ground_accuracy')}% (v1) to {metric('letter_triage', 'v2', 'ground_accuracy')}% (v2)", "05"],
+        ["Conduct letters found by the triage", f"recall {metric('letter_triage', 'v2', 'conduct_recall')}%, precision {metric('letter_triage', 'v2', 'conduct_precision')}%", "05"],
+        ["Briefs that follow the bank's conduct rules", f"{metric('case_brief', 'v1', 'rule_agreement_pass_rate')}% (v1) to {metric('case_brief', 'v4', 'rule_agreement_pass_rate')}% (v4)", "05"],
+        ["Briefs the judge finds grounded in the facts", f"{metric('case_brief', 'v1', 'grounded_pass_rate')}% (v1) to {metric('case_brief', 'v4', 'grounded_pass_rate')}% (v4)", "05"],
+    ]
+    rows += [[f"Genie, {label.lower()}", f"{p} of {n} ({pct}%)", "08"] for label, p, n, pct in g]
+    write("HEADLINES.md", "Headline figures",
+          "These are the figures the README and the deck quote. Each is computed from the live workspace after the "
+          "final run, and the last column names the evidence file that shows it in full.",
+          table(["figure", "value", "evidence"], rows))
+
+
 SECTIONS = {"01": ev01, "02": ev02, "03": ev03, "04": ev04_05, "06": ev06, "07": ev07, "08": ev08,
-            "09": ev09, "10": ev10}
+            "09": ev09, "10": ev10, "HL": evhl}
 
 
 def main() -> None:

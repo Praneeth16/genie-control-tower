@@ -143,7 +143,7 @@ resources:
         # check — which fails closed, but only after wasting an afternoon.
         #
         # NOTE: `uc_securable` has no SCHEMA level (CONNECTION / FUNCTION / TABLE / VOLUME only), so
-        # schema-wide SELECT and the unrestricted `region_entitlement` row for the SP are granted by
+        # schema-wide SELECT and the unrestricted `entitlements` row for the SP are granted by
         # scripts/grant_app_sp.py after the app exists and its service principal id is known.
 
         - name: docs_volume

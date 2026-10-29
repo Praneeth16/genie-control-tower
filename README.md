@@ -94,7 +94,8 @@ One iteration story, with numbers from [evidence/05](evidence/05_ai_evaluation.m
 
 - The first brief prompt agreed with the bank's conduct rules on 14% of 200 briefs.
 - Putting the rules in the prompt raised agreement to 100%. But the grounded judge's pass rate fell from 38% to 21%, and plain language fell from 88% to 51%, because the briefs now cited "Rule 3".
-- Giving the model the bank's decision as a fact, and asking it only to explain, raised grounded to 65% with agreement still at 100%. The briefs then ran long, which the next version addressed.
+- Giving the model the bank's decision as a fact, and asking it only to explain, raised grounded to 65% with agreement still at 100%. But only 26% of the briefs stayed within 60 words.
+- The final prompt asks for two short sentences and forbids adding any step the rule does not state. On the 200 August briefs it scored 90% grounded, 100% rule agreement and 86% plain language.
 - The letter triage went from 87.1% to 97.0% agreement with the recorded ground when the prompt defined each ground in the bank's terms.
 
 ## Repository layout

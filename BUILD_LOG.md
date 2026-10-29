@@ -61,7 +61,10 @@ I tested four things before writing the pipeline.
 - Under j2, the judge still failed briefs that called product code "PV" a "personal vehicle loan". The bank means passenger vehicle. The model had expanded the code from its own knowledge. I added the product name to the facts the model receives.
 - My own number check also had a bug. It failed "INR 33.39 L", which is a correct rounding of the outstanding amount. I fixed the check to allow rounding, and to allow amounts written in lakh or crore.
 - Prompt v2 listed the conduct rules in the prompt. Rule agreement rose to 100%. The grounded pass rate fell from 38% to 21%, and the plain language pass rate fell from 88% to 51%. The briefs now said "Per Rule 3". That rule is not in the facts, and an officer cannot read it. The judges were right.
-- Prompt v3 gives the model the bank's decision as a fact (`bank_rule`). The model explains the decision and does not decide it. See `evidence/05_ai_evaluation.md` for the v3 results.
+- Prompt v3 gives the model the bank's decision as a fact (`bank_rule`). The model explains the decision and does not decide it. Grounded rose to 65% and rule agreement stayed at 100%.
+- v3 had two new problems. Only 26% of the briefs stayed within 60 words, because the model now listed every fact. The grounded judge also failed briefs that added a step the rule does not state, e.g., "before further collection activity".
+- Prompt v4 asks for exactly two sentences. The first says why the account is ranked, in at most 30 words. The second says what to do, in the rule's own words, in at most 20 words. v4 scored 90% grounded, 100% rule agreement, 86% plain language and 86% within 60 words, on the 200 August briefs.
+- The evaluation had judged every brief for an account still on the list, including briefs written from an earlier month's facts. It now judges only briefs written from the current month end.
 
 ### Lakebase and the app
 
@@ -74,6 +77,13 @@ I tested four things before writing the pipeline.
   - The region comes from the record, not the request body.
   - Running an action needs the approver role.
   - A rejection is recorded as a rejection.
+
+### The final month and the trigger
+
+- The first file-arrival run failed after one second. It fired while I was running a pipeline update by hand, and the job reported "Pipeline update already in progress". The job queues its own runs, but it cannot queue behind an update started outside it.
+- Landing the held-back August drop started the cycle on its own. That run succeeded on every task.
+- Every planted finding matched the answer key except late uploads, which showed 238 against 236. A late call that the vendor also re-sent was counted twice. The quality summary now counts distinct contacts, and it matches.
+- After the final run, gold, Lakebase and the app all show 589 accounts on the worklist.
 
 ### Bundle
 

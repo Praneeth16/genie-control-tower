@@ -184,7 +184,7 @@ def test_controls_attached() -> None:
     # Any table with a region or branch dimension is scoped data and must be filtered.
     scoped = q(f"""SELECT DISTINCT table_name FROM {CAT}.information_schema.columns
                    WHERE table_schema = '{SCH}' AND column_name IN ('region','branch_id')
-                     AND table_name NOT IN ('branch_master','region_entitlement','document_index_source')""")
+                     AND table_name NOT IN ('branch_master','entitlements','document_index_source')""")
     unfiltered = sorted({r["table_name"] for r in scoped} - filtered)
     check("every table with a region or branch dimension has a row filter",
           not unfiltered, f"unfiltered: {unfiltered}" if unfiltered else
@@ -199,7 +199,7 @@ def test_no_region_structurally_invisible() -> None:
     print("\n[3] Fairness — can any region's problems be structurally hidden?")
 
     regions = {r["region"] for r in q(f"SELECT DISTINCT region FROM {FQ}.branch_master")}
-    ent = {r["region"] for r in q(f"SELECT DISTINCT region FROM {FQ}.region_entitlement")}
+    ent = {r["region"] for r in q(f"SELECT DISTINCT region FROM {FQ}.entitlements")}
     covered = regions if "ALL" in ent else regions & ent
     check("every operating region is reachable through some entitlement",
           not (regions - covered),
