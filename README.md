@@ -130,10 +130,12 @@ You need a workspace with Unity Catalog, serverless compute, a serverless SQL wa
 
 3. Set the variables in `.databricks/bundle/dev/variable-overrides.json`: `warehouse_id`, `uc_catalog`, and the four `persona_*` application ids.
 
-4. Write the Genie space files and build the frontend.
+4. Write the Genie space files and the dashboard file for your catalog, and build the frontend. The committed files are written for the catalog this was built in.
 
    ```bash
-   CT_CATALOG=<catalog> DATABRICKS_WAREHOUSE_ID=<id> LAKEBASE_ENDPOINT=x python3 genie/create_genie_agents.py --write
+   export CT_CATALOG=<catalog> DATABRICKS_WAREHOUSE_ID=<id> LAKEBASE_ENDPOINT=x
+   python3 genie/create_genie_agents.py --write
+   python3 dashboards/build_dashboard.py --write
    npm --prefix app/frontend install && npm --prefix app/frontend run build
    ```
 

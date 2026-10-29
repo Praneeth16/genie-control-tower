@@ -1,0 +1,1277 @@
+{
+  "datasets": [
+    {
+      "name": "gnpa_region",
+      "displayName": "GNPA % by region (Aug 2026)",
+      "queryLines": [
+        "SELECT b.region,\n",
+        "       ROUND(100.0 * SUM(CASE WHEN d.is_npa THEN d.outstanding_principal ELSE 0 END)\n",
+        "                   / SUM(d.outstanding_principal), 1) AS gnpa_pct,\n",
+        "       ROUND(SUM(d.outstanding_principal) / 10000000.0, 1) AS exposure_cr\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.delinquency_monthly d\n",
+        "JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b ON d.branch_id = b.branch_id\n",
+        "WHERE d.snapshot_month = DATE'2026-08-01'\n",
+        "GROUP BY b.region\n",
+        "ORDER BY gnpa_pct DESC\n"
+      ]
+    },
+    {
+      "name": "delinq_product",
+      "displayName": "Delinquency % by product (Aug 2026)",
+      "queryLines": [
+        "SELECT product_code,\n",
+        "       ROUND(100.0 * SUM(CASE WHEN dpd_days > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) AS delinquency_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.delinquency_monthly\n",
+        "WHERE snapshot_month = DATE'2026-08-01'\n",
+        "GROUP BY product_code\n",
+        "ORDER BY delinquency_pct DESC\n"
+      ]
+    },
+    {
+      "name": "mfi_solapur_trend",
+      "displayName": "Solapur microfinance delinquency trend",
+      "queryLines": [
+        "SELECT d.snapshot_month,\n",
+        "       ROUND(100.0 * SUM(CASE WHEN d.dpd_days > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) AS delinquency_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.delinquency_monthly d\n",
+        "JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b ON d.branch_id = b.branch_id\n",
+        "WHERE d.product_code = 'MFI' AND b.city = 'Solapur'\n",
+        "GROUP BY d.snapshot_month\n",
+        "ORDER BY d.snapshot_month\n"
+      ]
+    },
+    {
+      "name": "conduct_kpis",
+      "displayName": "Out-of-hours contact attempts",
+      "queryLines": [
+        "SELECT COUNT(*) AS out_of_hours_attempts\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.collections_activity\n",
+        "WHERE within_rbi_hours = FALSE\n"
+      ]
+    },
+    {
+      "name": "uncertified_kpi",
+      "displayName": "Uncertified agents making contact (2026)",
+      "queryLines": [
+        "SELECT COUNT(DISTINCT a.agent_id) AS uncertified_agents_contacting\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.collections_activity a\n",
+        "JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.recovery_agents r ON a.agent_id = r.agent_id\n",
+        "WHERE r.rbi_conduct_certified = FALSE\n",
+        "  AND a.activity_date >= DATE'2026-01-01'\n"
+      ]
+    },
+    {
+      "name": "agency_conduct",
+      "displayName": "Conduct exposure by agency",
+      "queryLines": [
+        "SELECT r.agency_name,\n",
+        "       COUNT(*) AS attempts,\n",
+        "       SUM(CASE WHEN a.within_rbi_hours = FALSE THEN 1 ELSE 0 END) AS out_of_hours,\n",
+        "       ROUND(100.0 * SUM(CASE WHEN a.within_rbi_hours = FALSE THEN 1 ELSE 0 END) / COUNT(*), 1) AS out_of_hours_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.collections_activity a\n",
+        "JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.recovery_agents r ON a.agent_id = r.agent_id\n",
+        "GROUP BY r.agency_name\n",
+        "ORDER BY out_of_hours_pct DESC\n"
+      ]
+    },
+    {
+      "name": "conduct_to_grievance",
+      "displayName": "Conduct breaches and the complaints they produce, by city",
+      "queryLines": [
+        "WITH contact AS (\n",
+        "  SELECT b.city, COUNT(*) AS attempts,\n",
+        "         SUM(CASE WHEN a.within_rbi_hours = FALSE THEN 1 ELSE 0 END) AS out_of_hours,\n",
+        "         COUNT(DISTINCT a.loan_account_id) AS accounts_contacted\n",
+        "  FROM serverless_lakebase_praneeth_catalog.control_tower_banking.collections_activity a\n",
+        "  JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b ON a.branch_id = b.branch_id\n",
+        "  GROUP BY b.city),\n",
+        "rec AS (\n",
+        "  SELECT b.city, COUNT(DISTINCT c.complaint_id) AS recovery_complaints\n",
+        "  FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints c\n",
+        "  JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_categories cc ON c.category_code = cc.category_code\n",
+        "  JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.loan_accounts l ON c.customer_id = l.customer_id\n",
+        "  JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b ON l.branch_id = b.branch_id\n",
+        "  WHERE cc.rbi_category = 'Recovery agents'\n",
+        "  GROUP BY b.city)\n",
+        "SELECT contact.city,\n",
+        "       contact.out_of_hours AS out_of_hours_contacts,\n",
+        "       ROUND(100.0 * contact.out_of_hours / contact.attempts, 1) AS out_of_hours_pct,\n",
+        "       COALESCE(rec.recovery_complaints, 0) AS recovery_complaints\n",
+        "FROM contact LEFT JOIN rec ON contact.city = rec.city\n",
+        "ORDER BY out_of_hours_contacts DESC\n"
+      ]
+    },
+    {
+      "name": "sla_category",
+      "displayName": "SLA breach % by RBI ground (Aug 2026)",
+      "queryLines": [
+        "SELECT rbi_category,\n",
+        "       ROUND(100.0 * SUM(breached_sla) / SUM(complaints_received), 1) AS breach_rate_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker\n",
+        "WHERE report_month = DATE'2026-08-01'\n",
+        "GROUP BY rbi_category\n",
+        "ORDER BY breach_rate_pct DESC\n"
+      ]
+    },
+    {
+      "name": "upi_incident",
+      "displayName": "June 2026 UPI switch incident",
+      "queryLines": [
+        "SELECT txn_date,\n",
+        "       COUNT(*) AS disputes,\n",
+        "       ROUND(100.0 * SUM(CASE WHEN auto_refunded THEN 1 ELSE 0 END) / COUNT(*), 1) AS auto_refund_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes\n",
+        "WHERE txn_date BETWEEN DATE'2026-06-01' AND DATE'2026-06-30'\n",
+        "GROUP BY txn_date\n",
+        "ORDER BY txn_date\n"
+      ]
+    },
+    {
+      "name": "ombudsman_kpi",
+      "displayName": "Ombudsman escalations",
+      "queryLines": [
+        "SELECT COUNT(*) AS ombudsman_escalations\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints\n",
+        "WHERE escalated_to_ombudsman = TRUE\n"
+      ]
+    },
+    {
+      "name": "open_past_sla_kpi",
+      "displayName": "Open complaints past SLA",
+      "queryLines": [
+        "SELECT COUNT(*) AS open_past_sla\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints\n",
+        "WHERE status = 'Open' AND DATEDIFF(DATE'2026-08-31', received_date) > sla_days\n"
+      ]
+    },
+    {
+      "name": "escalation_category",
+      "displayName": "Ombudsman escalation rate by ground",
+      "queryLines": [
+        "SELECT c.rbi_category,\n",
+        "       COUNT(*) AS complaints,\n",
+        "       SUM(CASE WHEN x.escalated_to_ombudsman THEN 1 ELSE 0 END) AS escalated,\n",
+        "       ROUND(100.0 * SUM(CASE WHEN x.escalated_to_ombudsman THEN 1 ELSE 0 END) / COUNT(*), 2) AS escalation_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints x\n",
+        "JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_categories c ON x.category_code = c.category_code\n",
+        "GROUP BY c.rbi_category\n",
+        "ORDER BY escalation_pct DESC\n"
+      ]
+    },
+    {
+      "name": "clawback_kpi",
+      "displayName": "RMs over-attaining but failing the quality gate",
+      "queryLines": [
+        "SELECT COUNT(DISTINCT rm_id) AS rms_in_clawback_cohort\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\n",
+        "WHERE attainment_pct >= 120 AND product_mix_score < 0.50\n"
+      ]
+    },
+    {
+      "name": "incentive_paid_kpi",
+      "displayName": "Incentive paid, Aug 2026 (INR lakh)",
+      "queryLines": [
+        "SELECT ROUND(SUM(incentive_earned) / 100000.0, 1) AS incentive_paid_lakh\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\n",
+        "WHERE achievement_month = DATE'2026-08-01'\n"
+      ]
+    },
+    {
+      "name": "incentive_mix_band",
+      "displayName": "Average incentive at >=120% attainment, by quality gate",
+      "queryLines": [
+        "SELECT CASE WHEN product_mix_score < 0.50 THEN 'Failed quality gate'\n",
+        "            ELSE 'Cleared quality gate' END AS mix_band,\n",
+        "       ROUND(AVG(incentive_earned), 0) AS avg_incentive,\n",
+        "       COUNT(*) AS rm_months\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\n",
+        "WHERE attainment_pct >= 120\n",
+        "GROUP BY 1\n"
+      ]
+    },
+    {
+      "name": "incentive_per_million",
+      "displayName": "Incentive per INR million of business, by grade",
+      "queryLines": [
+        "SELECT rm_grade,\n",
+        "       ROUND(1000000.0 * SUM(incentive_earned) / SUM(actual_casa_amount + actual_loan_amount), 2)\n",
+        "         AS incentive_per_million\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\n",
+        "WHERE achievement_month >= DATE'2026-03-01'\n",
+        "GROUP BY rm_grade\n",
+        "ORDER BY incentive_per_million DESC\n"
+      ]
+    },
+    {
+      "name": "clawback_grade",
+      "displayName": "Clawback rate by grade",
+      "queryLines": [
+        "SELECT rm_grade,\n",
+        "       COUNT(*) AS rm_months,\n",
+        "       SUM(CASE WHEN clawback_flag THEN 1 ELSE 0 END) AS clawback_months,\n",
+        "       ROUND(100.0 * SUM(CASE WHEN clawback_flag THEN 1 ELSE 0 END) / COUNT(*), 1) AS clawback_rate_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\n",
+        "GROUP BY rm_grade\n",
+        "ORDER BY clawback_rate_pct DESC\n"
+      ]
+    },
+    {
+      "name": "casa_attainment_region",
+      "displayName": "CASA attainment % by region (Aug 2026)",
+      "queryLines": [
+        "SELECT a.region,\n",
+        "       ROUND(100.0 * SUM(a.actual_casa_amount) / SUM(t.target_casa_amount), 1) AS casa_attainment_pct\n",
+        "FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement a\n",
+        "JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.rm_targets t ON a.rm_id = t.rm_id AND a.achievement_month = t.target_month\n",
+        "WHERE a.achievement_month = DATE'2026-08-01'\n",
+        "GROUP BY a.region\n",
+        "ORDER BY casa_attainment_pct DESC\n"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "collections",
+      "displayName": "Collections & Recovery",
+      "layout": [
+        {
+          "widget": {
+            "name": "md_col",
+            "spec": {
+              "version": 1,
+              "widgetType": "text",
+              "textbox_spec": "## Demo Retail Bank Control Tower \u2014 governed analytics\n**All data on this dashboard is synthetic.** It is published *without* embedded credentials, so every tile runs as **you**: the same Unity Catalog row filters and column masks that govern the Genie Agents govern this page, and the numbers agree with the numbers the agents give you.\n",
+              "frame": {
+                "showTitle": false
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_ooh",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "conduct_kpis",
+                  "fields": [
+                    {
+                      "name": "out_of_hours_attempts",
+                      "expression": "`out_of_hours_attempts`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "out_of_hours_attempts",
+                  "displayName": "Out-of-hours contact attempts"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Out-of-hours contact attempts"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_unc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "uncertified_kpi",
+                  "fields": [
+                    {
+                      "name": "uncertified_agents_contacting",
+                      "expression": "`uncertified_agents_contacting`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "uncertified_agents_contacting",
+                  "displayName": "Uncertified agents contacting (2026)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Uncertified agents contacting (2026)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_gnpa",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gnpa_region",
+                  "fields": [
+                    {
+                      "name": "region",
+                      "expression": "`region`"
+                    },
+                    {
+                      "name": "gnpa_pct",
+                      "expression": "`gnpa_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "region",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Region"
+                },
+                "y": {
+                  "fieldName": "gnpa_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "GNPA %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GNPA % by region (Aug 2026)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_delinq",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "delinq_product",
+                  "fields": [
+                    {
+                      "name": "product_code",
+                      "expression": "`product_code`"
+                    },
+                    {
+                      "name": "delinquency_pct",
+                      "expression": "`delinquency_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "product_code",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Product"
+                },
+                "y": {
+                  "fieldName": "delinquency_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Delinquency %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Delinquency % by product (Aug 2026)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 6,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_mfi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "mfi_solapur_trend",
+                  "fields": [
+                    {
+                      "name": "snapshot_month",
+                      "expression": "`snapshot_month`"
+                    },
+                    {
+                      "name": "delinquency_pct",
+                      "expression": "`delinquency_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "snapshot_month",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Month"
+                },
+                "y": {
+                  "fieldName": "delinquency_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Delinquency %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Solapur microfinance delinquency trend"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 12,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_agency",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "agency_conduct",
+                  "fields": [
+                    {
+                      "name": "agency_name",
+                      "expression": "`agency_name`"
+                    },
+                    {
+                      "name": "attempts",
+                      "expression": "`attempts`"
+                    },
+                    {
+                      "name": "out_of_hours",
+                      "expression": "`out_of_hours`"
+                    },
+                    {
+                      "name": "out_of_hours_pct",
+                      "expression": "`out_of_hours_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "agency_name",
+                    "displayName": "Agency",
+                    "order": 0
+                  },
+                  {
+                    "fieldName": "attempts",
+                    "displayName": "Attempts",
+                    "order": 1
+                  },
+                  {
+                    "fieldName": "out_of_hours",
+                    "displayName": "Out of hours",
+                    "order": 2
+                  },
+                  {
+                    "fieldName": "out_of_hours_pct",
+                    "displayName": "Out of hours %",
+                    "order": 3
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Conduct exposure by agency"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 18,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_conduct_grv",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "conduct_to_grievance",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "out_of_hours_contacts",
+                      "expression": "`out_of_hours_contacts`"
+                    },
+                    {
+                      "name": "out_of_hours_pct",
+                      "expression": "`out_of_hours_pct`"
+                    },
+                    {
+                      "name": "recovery_complaints",
+                      "expression": "`recovery_complaints`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "city",
+                    "displayName": "City",
+                    "order": 0
+                  },
+                  {
+                    "fieldName": "out_of_hours_contacts",
+                    "displayName": "Out-of-hours contacts",
+                    "order": 1
+                  },
+                  {
+                    "fieldName": "out_of_hours_pct",
+                    "displayName": "Out of hours %",
+                    "order": 2
+                  },
+                  {
+                    "fieldName": "recovery_complaints",
+                    "displayName": "Recovery-agent complaints",
+                    "order": 3
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Conduct breaches and the complaints they produce"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 18,
+            "width": 3,
+            "height": 6
+          }
+        }
+      ]
+    },
+    {
+      "name": "grievance",
+      "displayName": "Service & Grievance",
+      "layout": [
+        {
+          "widget": {
+            "name": "c_omb",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ombudsman_kpi",
+                  "fields": [
+                    {
+                      "name": "ombudsman_escalations",
+                      "expression": "`ombudsman_escalations`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "ombudsman_escalations",
+                  "displayName": "Ombudsman escalations"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Ombudsman escalations"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_open",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "open_past_sla_kpi",
+                  "fields": [
+                    {
+                      "name": "open_past_sla",
+                      "expression": "`open_past_sla`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "open_past_sla",
+                  "displayName": "Open complaints past SLA"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Open complaints past SLA"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_sla",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "sla_category",
+                  "fields": [
+                    {
+                      "name": "rbi_category",
+                      "expression": "`rbi_category`"
+                    },
+                    {
+                      "name": "breach_rate_pct",
+                      "expression": "`breach_rate_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "rbi_category",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "RBI ground"
+                },
+                "y": {
+                  "fieldName": "breach_rate_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Breach %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "SLA breach % by RBI ground (Aug 2026)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_upi_v",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "upi_incident",
+                  "fields": [
+                    {
+                      "name": "txn_date",
+                      "expression": "`txn_date`"
+                    },
+                    {
+                      "name": "disputes",
+                      "expression": "`disputes`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "txn_date",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Transaction date"
+                },
+                "y": {
+                  "fieldName": "disputes",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Disputes"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "UPI dispute volume, June 2026"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_upi_r",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "upi_incident",
+                  "fields": [
+                    {
+                      "name": "txn_date",
+                      "expression": "`txn_date`"
+                    },
+                    {
+                      "name": "auto_refund_pct",
+                      "expression": "`auto_refund_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "txn_date",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Transaction date"
+                },
+                "y": {
+                  "fieldName": "auto_refund_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Auto-refund %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "UPI auto-refund %, June 2026 (NPCI 30s reversal)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 9,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_esc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "escalation_category",
+                  "fields": [
+                    {
+                      "name": "rbi_category",
+                      "expression": "`rbi_category`"
+                    },
+                    {
+                      "name": "complaints",
+                      "expression": "`complaints`"
+                    },
+                    {
+                      "name": "escalated",
+                      "expression": "`escalated`"
+                    },
+                    {
+                      "name": "escalation_pct",
+                      "expression": "`escalation_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "rbi_category",
+                    "displayName": "RBI ground",
+                    "order": 0
+                  },
+                  {
+                    "fieldName": "complaints",
+                    "displayName": "Complaints",
+                    "order": 1
+                  },
+                  {
+                    "fieldName": "escalated",
+                    "displayName": "Escalated",
+                    "order": 2
+                  },
+                  {
+                    "fieldName": "escalation_pct",
+                    "displayName": "Escalation %",
+                    "order": 3
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Ombudsman escalation rate by ground"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 6,
+            "height": 6
+          }
+        }
+      ]
+    },
+    {
+      "name": "rm",
+      "displayName": "RM Performance & Incentive Integrity",
+      "layout": [
+        {
+          "widget": {
+            "name": "c_claw",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "clawback_kpi",
+                  "fields": [
+                    {
+                      "name": "rms_in_clawback_cohort",
+                      "expression": "`rms_in_clawback_cohort`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "rms_in_clawback_cohort",
+                  "displayName": "RMs over-attaining but failing the quality gate"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "RMs over-attaining but failing the quality gate"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "c_inc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "incentive_paid_kpi",
+                  "fields": [
+                    {
+                      "name": "incentive_paid_lakh",
+                      "expression": "`incentive_paid_lakh`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "incentive_paid_lakh",
+                  "displayName": "Incentive paid, Aug 2026 (INR lakh)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Incentive paid, Aug 2026 (INR lakh)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_mix",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "incentive_mix_band",
+                  "fields": [
+                    {
+                      "name": "mix_band",
+                      "expression": "`mix_band`"
+                    },
+                    {
+                      "name": "avg_incentive",
+                      "expression": "`avg_incentive`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "mix_band",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Quality gate outcome"
+                },
+                "y": {
+                  "fieldName": "avg_incentive",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Average incentive (INR)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Average incentive at >=120% attainment"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_ipm",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "incentive_per_million",
+                  "fields": [
+                    {
+                      "name": "rm_grade",
+                      "expression": "`rm_grade`"
+                    },
+                    {
+                      "name": "incentive_per_million",
+                      "expression": "`incentive_per_million`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "rm_grade",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Grade"
+                },
+                "y": {
+                  "fieldName": "incentive_per_million",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "INR per million"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Incentive per INR million of business, by grade"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 3,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ch_casa",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "casa_attainment_region",
+                  "fields": [
+                    {
+                      "name": "region",
+                      "expression": "`region`"
+                    },
+                    {
+                      "name": "casa_attainment_pct",
+                      "expression": "`casa_attainment_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "region",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Region"
+                },
+                "y": {
+                  "fieldName": "casa_attainment_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Attainment %"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "CASA attainment % by region (Aug 2026)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_claw",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "clawback_grade",
+                  "fields": [
+                    {
+                      "name": "rm_grade",
+                      "expression": "`rm_grade`"
+                    },
+                    {
+                      "name": "rm_months",
+                      "expression": "`rm_months`"
+                    },
+                    {
+                      "name": "clawback_months",
+                      "expression": "`clawback_months`"
+                    },
+                    {
+                      "name": "clawback_rate_pct",
+                      "expression": "`clawback_rate_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "rm_grade",
+                    "displayName": "Grade",
+                    "order": 0
+                  },
+                  {
+                    "fieldName": "rm_months",
+                    "displayName": "RM-months",
+                    "order": 1
+                  },
+                  {
+                    "fieldName": "clawback_months",
+                    "displayName": "Clawback months",
+                    "order": 2
+                  },
+                  {
+                    "fieldName": "clawback_rate_pct",
+                    "displayName": "Clawback rate %",
+                    "order": 3
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Clawback rate by grade"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 9,
+            "width": 3,
+            "height": 6
+          }
+        }
+      ]
+    }
+  ]
+}

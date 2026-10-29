@@ -10,7 +10,6 @@ app/app.yaml
 
 # Generated: recreated by the setup scripts, and workspace-specific
 genie/space_ids.json
-dashboards/control_tower.lvdash.json
 data/out/
 data/row_counts.json
 app/backend/row_counts.json
