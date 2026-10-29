@@ -1,0 +1,9 @@
+# The AI/BI dashboard, published WITHOUT embedded credentials: every tile runs as the viewer, under the
+# same row filters and masks as Genie and the app, so the three surfaces cannot disagree.
+resources:
+  dashboards:
+    ct_dashboard:
+      display_name: Genie Control Tower
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../dashboards/control_tower.lvdash.json
+      embed_credentials: false

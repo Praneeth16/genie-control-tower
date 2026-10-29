@@ -1,0 +1,42 @@
+# The three governed Genie agents, deployed from config-as-code (genie/create_genie_agents.py --write
+# produces the .geniespace.json files). The app receives their ids from here; nobody copies an id.
+# Personas get CAN_RUN so the persona evidence can ask Genie as each of them.
+
+genie_permissions: &genie_permissions
+  - level: CAN_MANAGE
+    user_name: ${workspace.current_user.userName}
+  - level: CAN_RUN
+    service_principal_name: ${var.persona_cro}
+  - level: CAN_RUN
+    service_principal_name: ${var.persona_collections_head}
+  - level: CAN_RUN
+    service_principal_name: ${var.persona_grievance_officer}
+  - level: CAN_RUN
+    service_principal_name: ${var.persona_auditor}
+
+resources:
+  genie_spaces:
+    collections:
+      title: Collections & Recovery
+      description: >-
+        Delinquency, DPD buckets, NPA, roll rates, the collections worklist and RBI recovery-agent
+        conduct. Amounts in INR. All data synthetic.
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../genie/spaces/collections.geniespace.json
+      permissions: *genie_permissions
+    grievance:
+      title: Service & Grievance
+      description: >-
+        Complaints, SLA against the RBI Integrated Ombudsman Scheme, UPI disputes, card chargebacks and
+        the AI triage of customer letters. All data synthetic.
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../genie/spaces/grievance.geniespace.json
+      permissions: *genie_permissions
+    rm:
+      title: RM Performance & Incentives
+      description: >-
+        Relationship manager targets, attainment, incentives, quality gate and clawback, and the
+        customer portfolio. All data synthetic.
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../genie/spaces/rm.geniespace.json
+      permissions: *genie_permissions

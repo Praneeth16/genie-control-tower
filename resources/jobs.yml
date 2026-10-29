@@ -108,6 +108,10 @@ resources:
                          --brief-prompt-version, "${var.brief_prompt_version}"]
         - task_key: sync_cases
           depends_on: [{task_key: case_briefs}]
+          # One unexplained SIGABRT in the first full cycle (succeeded on retry); retries make the
+          # cycle robust to it while it is investigated. The upsert is idempotent, so a retry is safe.
+          max_retries: 2
+          min_retry_interval_millis: 30000
           environment_key: default
           spark_python_task:
             python_file: ../serve/sync_cases.py

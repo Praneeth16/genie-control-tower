@@ -32,9 +32,11 @@ COMMENT 'AI-written case briefs for the top of the collections worklist, one per
 MERGE INTO ${CATALOG}.${SCHEMA}.collections_case_brief t
 USING (
   WITH top AS (
+    -- The product NAME is in the facts because v1 had only the code, and the model expanded codes from
+    -- its own knowledge: "PV" came back as "personal vehicle loan" when the bank means passenger vehicle.
     SELECT loan_account_id, region, snapshot_month, priority_rank,
            to_json(named_struct(
-             'product_code', product_code, 'region', region, 'snapshot_month', snapshot_month,
+             'product', pm.product_name, 'region', region, 'snapshot_month', snapshot_month,
              'dpd_days', dpd_days, 'dpd_bucket', dpd_bucket, 'is_npa', is_npa,
              'outstanding_principal_inr', round(outstanding_principal, 0), 'overdue_amount_inr', round(overdue_amount, 0),
              'forward_rolls_last_3_months', forward_rolls_3m, 'contacts_90d', contacts_90d,
@@ -44,8 +46,11 @@ USING (
              'last_contact_date', last_contact_date, 'open_grievance', open_grievance,
              'letter_alleges_agent_misconduct', ai_alleged_conduct_breach,
              'priority_score', priority_score, 'priority_rank', priority_rank,
-             'score_drivers', drivers, 'conduct_flags', conduct_flags)) AS facts
+             'score_drivers', drivers, 'conduct_flags', conduct_flags,
+             -- v3: the rule-based treatment is a FACT the model explains, not a rule it re-derives.
+             'bank_rule', recommended_treatment)) AS facts
     FROM ${CATALOG}.${SCHEMA}.collections_priority
+    JOIN ${CATALOG}.${SCHEMA}.product_master pm USING (product_code)
     WHERE priority_rank <= ${TOP_N}
   ),
   todo AS (
@@ -71,7 +76,7 @@ USING (
             WHEN 'v2' THEN
               'You write case briefs for a collections officer at an Indian retail bank. '
               'Use ONLY the facts in the JSON below. Never invent people, amounts, dates, documents or events, '
-              'and never state a number that is not in the facts.\n'
+              'never state a number that is not in the facts, and name the product exactly as given.\n'
               'The bank\'s conduct rules come before recovery priority, in this order:\n'
               '  1. open_grievance true: recommend hold_contact. Recovery contact is suspended while a grievance is open.\n'
               '  2. otherwise, any out-of-hours or uncertified-agent contact, or a letter alleging agent misconduct: '
@@ -84,6 +89,21 @@ USING (
               'Quote amounts exactly as they appear in the facts, in INR, without converting to lakh or crore, '
               'and do no arithmetic on them.\n'
               'recommended_action: exactly one of the allowed values, following the rules above.\n'
+              'facts_used: the JSON keys you relied on.\n\nFACTS:\n'
+            WHEN 'v3' THEN
+              'You write case briefs for a collections officer at an Indian retail bank. '
+              'Use ONLY the facts in the JSON below. Never invent people, amounts, dates, documents, events or rules, '
+              'never state a number that is not in the facts, and name the product exactly as given.\n'
+              'The bank has already decided how this account may be worked: that is bank_rule. Do not re-derive it '
+              'and do not refer to rules by number. Explain it in plain words a branch officer understands, using the '
+              'facts that lead to it (an open grievance, contacts outside 08:00-19:00 or by an uncertified agent, a '
+              'letter alleging agent misconduct, NPA status, days past due).\n'
+              'explanation: two or three short sentences, at most 50 words: why the account is at this position on the '
+              'worklist, then what bank_rule means for working it. Write amounts in INR with thousands separators and '
+              'no decimals; do not convert to lakh or crore and do no arithmetic.\n'
+              'recommended_action: the allowed value that carries out bank_rule: hold_contact for a hold, '
+              'assign_recovery_agency for a reassignment, offer_settlement for settlement or legal review, '
+              'schedule_field_visit for a field visit, tele_calling_reminder for tele-calling.\n'
               'facts_used: the JSON keys you relied on.\n\nFACTS:\n'
           END,
           facts),

@@ -1,13 +1,13 @@
 # The Databricks App. See databricks.yml for the variables.
 resources:
   apps:
-    control_tower:
+    ct_app:
       name: ${var.app_name}
       description: >-
         Genie Control Tower — three governed Genie Agents (Collections, Grievance, RM) under a
         supervisor, with a human-approved action plane, RBI conduct guardrails, MLflow tracing and
         an embedded governance dashboard. All data is synthetic.
-      source_code_path: ./app
+      source_code_path: ../app
 
       # Runtime config, generated from the variables above. This OVERRIDES app/app.yaml — see the header.
       config:
@@ -24,24 +24,20 @@ resources:
             value: ${var.warehouse_id}
           - name: DATABRICKS_CHAT_ENDPOINT
             value: ${var.chat_endpoint}
-          - name: LAKEBASE_INSTANCE
-            value: ${var.lakebase_instance}
+          - name: LAKEBASE_ENDPOINT
+            value: ${var.lakebase_endpoint}
           - name: LAKEBASE_DBNAME
             value: databricks_postgres
           - name: LAKEBASE_SCHEMA
             value: ${var.lakebase_schema}
           - name: COLLECTIONS_SPACE_ID
-            value: ${var.collections_space_id}
+            value: ${resources.genie_spaces.collections.id}
           - name: GRIEVANCE_SPACE_ID
-            value: ${var.grievance_space_id}
+            value: ${resources.genie_spaces.grievance.id}
           - name: RM_SPACE_ID
-            value: ${var.rm_space_id}
+            value: ${resources.genie_spaces.rm.id}
           - name: DASHBOARD_ID
-            value: ${var.dashboard_id}
-          - name: VS_ENDPOINT
-            value: ${var.vs_endpoint}
-          - name: VS_INDEX
-            value: ${var.vs_index}
+            value: ${resources.dashboards.ct_dashboard.id}
           # TRUE in a deployed app: a request arriving WITHOUT a forwarded user token is refused rather
           # than served as the service principal. That fallback is a privilege escalation — it reads the
           # whole book for a user entitled to one region, and produces a plausible answer rather than an
@@ -61,11 +57,11 @@ resources:
           # External systems the action plane acts on. Calls route through the Unity Catalog HTTP
           # connection named here, so every outbound bank action is catalog-governed and appears in
           # lineage; the URL is only used by the direct-POST fallback. Both blank is a valid install —
-          # actions are then recorded and approved without an outbound call.
+          # actions are then recorded and approved without an outbound call. Optional settings that are
+          # off in this build (vector search, the mock-systems URL) are omitted rather than set blank:
+          # Apps rejects an environment variable with an empty value.
           - name: CT_HTTP_CONNECTION
             value: ${var.http_connection}
-          - name: CT_MOCK_SYSTEMS_URL
-            value: ${var.mock_systems_url}
           # Appears on generated customer correspondence — see app/.env.example.
           - name: BANK_NAME
             value: ${var.bank_name}
@@ -112,28 +108,28 @@ resources:
           description: Collections & Recovery Genie Agent.
           genie_space:
             name: Collections & Recovery
-            space_id: ${var.collections_space_id}
+            space_id: ${resources.genie_spaces.collections.id}
             permission: CAN_RUN
 
         - name: genie_grievance
           description: Service & Grievance Genie Agent.
           genie_space:
             name: Service & Grievance
-            space_id: ${var.grievance_space_id}
+            space_id: ${resources.genie_spaces.grievance.id}
             permission: CAN_RUN
 
         - name: genie_rm
           description: RM Performance & Incentives Genie Agent.
           genie_space:
             name: RM Performance & Incentives
-            space_id: ${var.rm_space_id}
+            space_id: ${resources.genie_spaces.rm.id}
             permission: CAN_RUN
 
         - name: lakebase
-          description: Approval state machine, action lineage and session memory.
-          database:
-            instance_name: ${var.lakebase_instance}
-            database_name: databricks_postgres
+          description: The collections case queue, the approval state machine, action lineage and session memory.
+          postgres:
+            branch: projects/${var.lakebase_project}/branches/production
+            database: projects/${var.lakebase_project}/branches/production/databases/databricks-postgres
             permission: CAN_CONNECT_AND_CREATE
 
         # The action tools are UC FUNCTIONS, not generated SQL: granting EXECUTE on the functions

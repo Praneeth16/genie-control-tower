@@ -55,7 +55,7 @@ def main() -> int:
         f"granted_by, granted_at) VALUES ('{sp}', 'App guardrail identity', 'ALL', FALSE, FALSE, 'install', "
         f"current_timestamp())",
     ]
-    if config.VS_INDEX:
+    if config.VS_ENDPOINT:
         statements.append(f"GRANT SELECT ON TABLE {config.VS_INDEX} TO `{sp}`")
         statements.append(f"GRANT SELECT ON TABLE {config.FQ}.document_index_source TO `{sp}`")
 

@@ -41,9 +41,11 @@ def _user_client(request: Request):
 
 
 def visible_regions(request: Request) -> list[str]:
-    """The regions Unity Catalog lets this caller see, asked of UC as the caller."""
-    rows = dbx.run_sql(f"SELECT DISTINCT region FROM {FQ}.branch_master WHERE {FQ}.region_visible(region)",
-                       w=_user_client(request))["rows"]
+    """The regions Unity Catalog lets this caller see, asked of UC as the caller. Read through a
+    row-filtered table rather than by calling region_visible() directly: the OBO token's restricted SQL
+    scope may not invoke the function itself, but the filter applies to the read exactly as it does to
+    every other query this person makes."""
+    rows = dbx.run_sql(f"SELECT DISTINCT region FROM {FQ}.loan_accounts", w=_user_client(request))["rows"]
     return sorted(r["region"] for r in rows)
 
 

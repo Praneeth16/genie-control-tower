@@ -120,6 +120,13 @@ COLLECTIONS = {
             "Central), zone (Metro/Urban/Semi-Urban/Rural). Join only when the question needs city, "
             "state, region or zone."
         ),
+        "collections_priority": (
+            "The collections WORKLIST: one row per account delinquent at the latest month end, ranked by "
+            "an explainable points score. priority_score is the sum of dpd_points, roll_points, "
+            "exposure_points and promise_points; drivers lists them in words. conduct_flags and "
+            "open_grievance say how the account may be worked; recommended_treatment is the rule-based "
+            "next step. Use for 'who should we work first', 'how many accounts are on hold', worklist size."
+        ),
     },
     "instructions": """### Space metadata
 You answer questions about loan collections and recovery for an Indian retail and commercial bank.
@@ -158,6 +165,12 @@ Contactability means the share of attempts whose outcome is neither 'Not Reachab
 MFI is the Microfinance Group Loan product (product_code = 'MFI'). CV is the Commercial Vehicle
 Loan product (product_code = 'CV'). Vehicle Finance as a segment covers CV, PV and TW.
 
+### The worklist
+collections_priority is the worklist the collections team works today. "On the worklist" means a row in
+collections_priority. "On hold" means open_grievance = TRUE: recovery contact is suspended while the
+borrower's grievance is open. "Conduct flag" means size(conduct_flags) > 0. Rank 1 is worked first.
+Every table also carries region, so regional questions need no join to branch_master.
+
 ### RBI conduct rules
 RBI permits borrower contact only between 08:00 and 19:00. collections_activity.contact_hour is the
 hour in 24-hour clock and within_rbi_hours is TRUE when contact fell inside that window. Questions
@@ -184,7 +197,7 @@ When asked WHY something moved, compare the affected slice against a control sli
 other products, or the prior period) rather than describing the affected slice alone.
 
 ### Error handling
-If a question needs a column that does not exist in these six tables, say which column is missing
+If a question needs a column that does not exist in these tables, say which column is missing
 rather than substituting a similar one.
 If a question spans customer complaints, RBI ombudsman cases, or relationship-manager incentives,
 say it belongs to a different domain agent and do not guess from these tables.""",
@@ -221,6 +234,7 @@ say it belongs to a different domain agent and do not guess from these tables.""
         "Show contact attempts that breached RBI permitted hours, by agency.",
         "Which recovery agents are not RBI conduct certified but still made contact this year?",
         "What is the bucket-2 roll-forward rate for microfinance by month?",
+        "Which accounts should we work first, and why?",
     ],
     "examples": [
         ("What is the delinquency rate by product for the latest month?",
@@ -328,6 +342,14 @@ WHERE a.product_code = 'MFI' AND b.city = 'Solapur'
          f"""SELECT r.agency_name, COUNT(*) AS out_of_hours_contacts
 FROM {fq('collections_activity')} a JOIN {fq('recovery_agents')} r ON a.agent_id = r.agent_id
 WHERE a.within_rbi_hours = FALSE GROUP BY r.agency_name ORDER BY out_of_hours_contacts DESC LIMIT 3"""),
+        ("How many accounts are on the collections worklist in each region, and how much do they owe?",
+         f"""SELECT region, COUNT(*) AS accounts, ROUND(SUM(outstanding_principal), 0) AS outstanding_inr
+FROM {fq('collections_priority')} GROUP BY region ORDER BY outstanding_inr DESC"""),
+        ("How many worklist accounts are on hold because of an open grievance?",
+         f"SELECT COUNT(*) AS on_hold FROM {fq('collections_priority')} WHERE open_grievance"),
+        ("What share of the collections worklist carries a conduct flag?",
+         f"""SELECT ROUND(100.0 * SUM(CASE WHEN size(conduct_flags) > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) AS pct_with_conduct_flag
+FROM {fq('collections_priority')}"""),
         ("What is the total outstanding principal on microfinance loans as of 2026-08-01?",
          f"""SELECT ROUND(SUM(outstanding_principal), 2) AS exposure_inr
 FROM {fq('delinquency_monthly')} WHERE product_code = 'MFI' AND snapshot_month = DATE'2026-08-01'"""),
@@ -380,6 +402,13 @@ GRIEVANCE = {
             "Branch dimension: branch_id, branch_name, city, state, region, zone. Join only for "
             "city, state, region or zone."
         ),
+        "complaint_ai_triage": (
+            "AI triage of each customer's complaint LETTER, produced inside the data pipeline: "
+            "predicted_rbi_ground, alleges_conduct_breach (recovery-agent misconduct described in the "
+            "letter), breach_types, urgency (high/medium/low) and a one-line summary. Join to complaints "
+            "on complaint_id. It is read from the customer's own words and can differ from the ground the "
+            "grievance desk recorded in complaints.rbi_category; say which one you used."
+        ),
     },
     "instructions": """### Space metadata
 You answer questions about customer complaints, grievance redressal, UPI disputes and card
@@ -396,6 +425,8 @@ aggregated by month, branch and RBI category, so results stay small and cannot b
 truncated. Use the raw complaints table only when the question needs complaint-level detail such as
 severity, channel, repeat complainants, or complaint text.
 An open complaint has status = 'Open' with NULL resolved_date and NULL days_to_resolve.
+For what customers SAY in their letters (alleged misconduct, urgency), use complaint_ai_triage; it is an
+AI reading of the letter, a signal for review rather than a finding, and you must say so when you use it.
 upi_disputes is separate from complaints. A UPI dispute may or may not also become a complaint; do
 not assume a one-to-one relationship.
 chargebacks covers card disputes only, never UPI.
@@ -432,12 +463,10 @@ and, for a city or region, join branch_master. "Are microfinance customers in So
 more" is answered here as complaints WHERE product_code = 'MFI' joined to branch_master WHERE
 city = 'Solapur'.
 
-### Known incident
-A UPI switch degradation occurred on 2026-06-14 and 2026-06-15. On those days UPI dispute volume
-was roughly ten times normal and the auto-refund rate fell from about 78 percent to about 35
-percent. The resulting complaints arrived two days later, 2026-06-16 to 2026-06-18, and
-payment-systems SLA breaches spiked that month. When asked why complaints or breaches rose in June
-2026, investigate that chain rather than describing the spike alone.
+### Investigating a spike
+When asked why complaints or SLA breaches rose in a period, look for a cause upstream in the same data
+(for example a jump in UPI dispute volume or a fall in the auto-refund rate a few days earlier) and show
+that chain with numbers, rather than describing the spike alone.
 
 ### CRITICAL response standards
 ALWAYS STATE THE COMPUTED ANSWER IN WORDS, as a number, before anything else. If you want to offer a
@@ -464,6 +493,7 @@ question merely because it names a lending product: complaint volume, SLA breach
 exposure FOR a product's customers is this agent's own subject. Decline only the delinquency or
 recovery METRICS themselves.""",
     "joins": [
+        ("complaint_ai_triage", "complaints", "`complaint_ai_triage`.`complaint_id` = `complaints`.`complaint_id`", ONE_TO_ONE),
         ("complaints", "complaint_categories", "`complaints`.`category_code` = `complaint_categories`.`category_code`", MANY_TO_ONE),
         ("complaints", "branch_master", "`complaints`.`branch_id` = `branch_master`.`branch_id`", MANY_TO_ONE),
         ("sla_tracker", "branch_master", "`sla_tracker`.`branch_id` = `branch_master`.`branch_id`", MANY_TO_ONE),
@@ -552,6 +582,8 @@ GROUP BY cc.rbi_category, cc.category_name ORDER BY escalations DESC"""),
 FROM {fq('chargebacks')} GROUP BY merchant_category ORDER BY cases DESC"""),
     ],
     "benchmarks": [
+        ("How many complaint letters allege recovery-agent misconduct, according to the AI triage?",
+         f"SELECT COUNT(*) AS letters FROM {fq('complaint_ai_triage')} WHERE alleges_conduct_breach"),
         ("What is the SLA breach rate by RBI category for August 2026?",
          f"""SELECT rbi_category, ROUND(100.0 * SUM(breached_sla) / NULLIF(SUM(complaints_received), 0), 1) AS breach_pct
 FROM {fq('sla_tracker')} WHERE report_month = DATE'2026-08-01' GROUP BY rbi_category ORDER BY breach_pct DESC"""),
@@ -669,13 +701,10 @@ Churn risk means churn_risk_score, 0 to 1; above 0.7 warrants retention action.
 League table means RMs ranked by a measure, usually attainment_pct or incentive_earned.
 Incentive per rupee of business means incentive_earned / (actual_casa_amount + actual_loan_amount).
 
-### The finding to surface
-Roughly 21 RMs consistently over-attain on CASA and loan volume while selling very little
-insurance, dragging product_mix_score below 0.50. They land in a full-payout attainment band but
-fail the quality gate, so clawback_flag is TRUE. When asked about incentive fairness, incentive
-quality, or who is overpaid, find this cohort: attainment_pct >= 120 AND product_mix_score < 0.50.
-Contrast their incentive_earned and actual_insurance against RMs at similar attainment who cleared
-the gate.
+### Incentive quality
+Incentive distortion means paying a full incentive for volume while portfolio quality is poor. When asked
+about incentive fairness or quality, compare RMs in full-payout attainment bands who failed the
+product-mix quality gate (clawback_flag = TRUE) against those at similar attainment who cleared it.
 
 ### CRITICAL response standards
 ALWAYS STATE THE COMPUTED ANSWER IN WORDS, as a number, before anything else. If you want to offer a
@@ -783,7 +812,7 @@ GROUP BY c.rm_id, r.rm_name, c.region ORDER BY thin_relationships DESC LIMIT 20"
        ROUND(c.total_relationship_value, 0) AS relationship_value_inr,
        ROUND(c.casa_balance, 0) AS casa_balance_inr, ROUND(c.churn_risk_score, 3) AS churn_risk
 FROM {fq('customer_portfolio')} c
-WHERE c.customer_segment IN ('Affluent', 'Private', 'Mass Affluent')
+WHERE c.customer_segment = 'Affluent'
   AND NOT EXISTS (SELECT 1 FROM {fq('product_holdings')} h
                   WHERE h.customer_id = c.customer_id AND h.product_code = 'CC' AND h.is_active)
 ORDER BY c.total_relationship_value DESC LIMIT 50"""),
@@ -814,7 +843,7 @@ WHERE achievement_month = DATE'2026-08-01' ORDER BY attainment_pct DESC LIMIT 1"
 WHERE achievement_month = DATE'2026-08-01'"""),
         ("How many affluent-segment customers have no active credit card?",
          f"""SELECT COUNT(*) AS customers FROM {fq('customer_portfolio')} c
-WHERE c.customer_segment IN ('Affluent', 'Private', 'Mass Affluent')
+WHERE c.customer_segment = 'Affluent'
   AND NOT EXISTS (SELECT 1 FROM {fq('product_holdings')} h
                   WHERE h.customer_id = c.customer_id AND h.product_code = 'CC' AND h.is_active)"""),
         ("Which RM grade has the highest clawback rate?",
@@ -895,6 +924,18 @@ def serialize(spec: dict) -> str:
     return json.dumps(body)
 
 
+def fallback_markdown(spec: dict) -> str:
+    """The space as one instruction document for the app's text2sql fallback. Generated: do not edit."""
+    out = [f"# {spec['title']}", "", "<!-- GENERATED by genie/create_genie_agents.py --write. Do not edit. -->", "",
+           "## Tables", ""]
+    out += [f"- `{fq(t)}`: {d}" for t, d in sorted(spec["tables"].items())]
+    out += ["", "## Joins", ""] + [f"- {cond}" for _, _, cond, _ in spec["joins"]]
+    out += ["", "## Instructions", "", spec["instructions"], "", "## Example questions and SQL", ""]
+    for q, sq in spec["examples"]:
+        out += [f"### {q}", "", "```sql", sq, "```", ""]
+    return "\n".join(out)
+
+
 def load_ids() -> dict:
     if os.path.exists(IDS_PATH):
         return json.load(open(IDS_PATH))
@@ -950,7 +991,29 @@ def main() -> int:
                     help="replace config on existing agents")
     ap.add_argument("--list", action="store_true", help="show recorded space ids")
     ap.add_argument("--dump", metavar="KEY", help="print the serialized payload and exit")
+    ap.add_argument("--write", action="store_true",
+                    help="write genie/spaces/<key>.geniespace.json for the bundle's genie_spaces resources")
     args = ap.parse_args()
+
+    if args.write:
+        # The bundle deploys these files, so the spaces are created and updated with everything else and
+        # the app receives their ids from the bundle. No id is copied by hand.
+        out_dir = os.path.join(HERE, "spaces")
+        os.makedirs(out_dir, exist_ok=True)
+        for k, spec in AGENTS.items():
+            path = os.path.join(out_dir, f"{k}.geniespace.json")
+            with open(path, "w") as fh:
+                json.dump(json.loads(serialize(spec)), fh, indent=1)
+                fh.write("\n")
+            print(f"  wrote {path}")
+            # The app's text2sql fallback reads the SAME definition, generated here. It used to read
+            # hand-kept copies that had drifted from the spaces (missing the newest rules), so the
+            # fallback answered by different rules from the agent it stands in for.
+            md = os.path.join(HERE, "..", "app", "backend", f"{k}_space.md")
+            with open(md, "w") as fh:
+                fh.write(fallback_markdown(spec).replace(f"{CATALOG}.{SCHEMA}", "${FQ}"))
+            print(f"  wrote {os.path.normpath(md)}")
+        return 0
 
     ids = load_ids()
 

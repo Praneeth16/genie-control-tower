@@ -38,12 +38,19 @@ include:
   - resources/pipeline.yml
   - resources/jobs.yml
   - resources/personas.yml
+  - resources/genie.yml
+  - resources/dashboard.yml
+  - resources/app.yml
 
 # Without this block the bundle uploads node_modules FILE BY FILE — 419MB across app/frontend and
 # scripts — and `bundle deploy` appears to hang with no output for half an hour before it ever reaches
 # the app deployment step. Only `app/frontend/dist` is needed at runtime (uvicorn serves the built
 # bundle); the sources that produce it are not, and neither is the QA browser driver.
 sync:
+  # The built frontend is gitignored (it is build output) but the app serves it, so it must still sync.
+  # Build it first: npm --prefix app/frontend run build.
+  include:
+    - app/frontend/dist/**
   exclude:
     - "**/node_modules"
     # Local secrets and per-workspace ids. Never syncs to the workspace, never commits.
@@ -56,12 +63,12 @@ sync:
     - "**/.venv"
     - "**/*.pyc"
     - ".databricks"
-    # Generated CSVs: the tables are already loaded in Unity Catalog, so shipping the raw extracts adds
-    # megabytes and a second, staler copy of the same data.
-    - "data/out"
+    # Local tooling, and the frontend sources: the app serves the built bundle only.
+    - ".venv"
+    - ".code-review-graph"
+    - "app/frontend/src"
     # Benchmark output. Useful history in the repo, dead weight in the deployed app.
     - "eval/results"
-    - "research/raw"
 
 variables:
   # No defaults for anything workspace-specific, on purpose. A default that points at the workspace this
@@ -79,16 +86,11 @@ variables:
     description: |
       Unity Catalog holding the workshop schema. Must already exist, and you need CREATE SCHEMA on it.
   uc_schema:
-    description: Schema created by data/ddl.sql.
+    description: Schema the pipeline publishes to (created by the setup job, governance/storage.sql).
     default: control_tower_banking
   uc_volume:
     description: Volume holding letters, agency contracts and generated drafts.
     default: docs
-  lakebase_instance:
-    description: |
-      Lakebase (serverless Postgres) instance for the approval state machine and action lineage.
-      Lakebase has a per-workspace instance quota, so reusing an existing instance is normal —
-      this project isolates its state in its own SCHEMA, not by instance.
   lakebase_schema:
     description: Postgres schema for the action plane.
     default: control_tower
@@ -97,19 +99,7 @@ variables:
       Model serving endpoint used by the supervisor's router and answer fuser. Any chat model.
     default: databricks-claude-sonnet-4-5
 
-  # --- created by the setup scripts; fill in after running them -----------------
-  collections_space_id:
-    description: Genie space id from `python3 genie/create_genie_agents.py --create`.
-    default: ""
-  grievance_space_id:
-    description: Genie space id from `python3 genie/create_genie_agents.py --create`.
-    default: ""
-  rm_space_id:
-    description: Genie space id from `python3 genie/create_genie_agents.py --create`.
-    default: ""
-  dashboard_id:
-    description: Printed by `python3 dashboards/build_dashboard.py --deploy`. Blank hides the tab.
-    default: ""
+  # --- optional ------------------------------------------------------------------
   vs_endpoint:
     description: |
       Vector Search endpoint name for semantic document search. Endpoints are shared, billable,
@@ -166,7 +156,7 @@ variables:
     default: databricks-gpt-5-5
   triage_prompt_version:
     description: Prompt version for the letter triage (see pipeline/06_intelligence.sql).
-    default: v1
+    default: v2
   lakebase_project:
     description: Lakebase autoscaling project id (databricks postgres create-project <id>).
     default: genie-control-tower
@@ -175,7 +165,7 @@ variables:
     default: projects/${var.lakebase_project}/branches/production/endpoints/primary
   brief_prompt_version:
     description: Prompt version for the case briefs (see ai/case_brief.sql).
-    default: v1
+    default: v3
   persona_cro:
     description: Application id of the service principal standing in for the Chief Risk Officer.
   persona_collections_head:

@@ -54,22 +54,12 @@ def invalidate() -> None:
     with _cache_lock:
         _cache.clear()
 
-# Tables the row-level policies apply to, with the full row counts captured at generation time. The
-# scope panel compares what the CALLER sees against these, which turns "row-level security is
-# enabled" into a number the customer can check.
-# Verified against the tables on 2026-09-03. If the generator is re-run with a different seed or
-# volume these must be re-measured: a wrong total here shows a user "225% visible", which discredits
-# the whole panel.
-GOVERNED_TABLES = {
-    "delinquency_monthly": 108000,
-    "collections_activity": 63267,
-    "upi_disputes": 26316,
-    "complaints": 9660,
-    "customer_portfolio": 9000,
-    "loan_accounts": 6000,
-    "rm_achievement": 3240,
-    "recovery_agents": 60,
-}
+# Tables the row-level policies apply to. The scope panel compares what the CALLER sees against the
+# full counts, which turns "row-level security is enabled" into a number the customer can check.
+# The tables the scope panel reports, compared against the pipeline's unfiltered counts (gold_row_counts),
+# not against numbers typed here: those went stale the moment the data was rebuilt.
+GOVERNED_TABLES = ("delinquency_monthly", "collections_activity", "upi_disputes", "complaints",
+                   "customer_portfolio", "loan_accounts", "rm_achievement", "recovery_agents")
 
 
 def scope(w=None) -> dict[str, Any]:
@@ -103,9 +93,11 @@ def _scope(w=None) -> dict[str, Any]:
     visible = {r["table_name"]: int(r["visible"])
                for r in dbx.run_sql(counts_sql, w=w)["rows"]}
 
-    tables = [{"table": t, "visible": visible.get(t, 0), "total": total,
-               "pct": round(100.0 * visible.get(t, 0) / total, 1) if total else 0.0}
-              for t, total in sorted(GOVERNED_TABLES.items())]
+    totals = {r["table_name"]: int(r["row_count"])
+              for r in dbx.run_sql(f"SELECT table_name, row_count FROM {FQ}.gold_row_counts")["rows"]}
+    tables = [{"table": t, "visible": visible.get(t, 0), "total": totals.get(t, 0),
+               "pct": round(100.0 * visible.get(t, 0) / totals[t], 1) if totals.get(t) else 0.0}
+              for t in sorted(GOVERNED_TABLES)]
 
     # A masked identifier proves the column mask reached this caller. Taken from a real row so the
     # panel cannot claim masking that is not happening.
