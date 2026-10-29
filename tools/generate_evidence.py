@@ -115,6 +115,8 @@ def q(ctx: Ctx, statement: str, limit: int = 60) -> str:
 # Personal identifiers that must not appear in committed evidence (the builder's email). Service principal
 # application ids stay: they are opaque, and they are how the persona columns can be checked.
 REDACT: dict[str, str] = {}
+# --reuse-genie: render 08 from the results files of the last run instead of asking every question again.
+REUSE_GENIE = False
 
 
 def write(name: str, title: str, proves: str, body: str) -> None:
@@ -382,9 +384,10 @@ def ev08(ctx: Ctx) -> None:
                COLLECTIONS_SPACE_ID=ctx.spaces["collections"], GRIEVANCE_SPACE_ID=ctx.spaces["grievance"],
                RM_SPACE_ID=ctx.spaces["rm"])
     parts = []
-    for mode in (["genie"], ["genie", "--heldout"]):
-        subprocess.run([sys.executable, "eval/run_eval.py", *mode], cwd=ROOT, env=env, check=False)
-        res = json.load(open(os.path.join(ROOT, "eval", "results", "genie-latest.json")))
+    for mode, results_file in ((["genie"], "genie-latest.json"), (["genie", "--heldout"], "heldout-genie-latest.json")):
+        if not REUSE_GENIE:
+            subprocess.run([sys.executable, "eval/run_eval.py", *mode], cwd=ROOT, env=env, check=False)
+        res = json.load(open(os.path.join(ROOT, "eval", "results", results_file)))
         label = "held-out questions (not used to tune the spaces)" if "--heldout" in mode else "benchmark questions"
         rows = [[c["id"], c["domain"], c["question"], c["outcome"], c.get("matched_in", ""), (c.get("detail") or "")[:140]]
                 for c in res["cases"]]
@@ -430,20 +433,26 @@ def ev10(ctx: Ctx) -> None:
         rows.append([f"{method} {path}", r.status_code, r.text[:160]])
     h = ctx.app("GET", "/api/health").json()
     case = ctx.app("GET", "/api/cases?limit=1").json()["cases"][0]
-    act = ctx.app("POST", "/api/act", json={"action_type": "assign_recovery_agency", "subject": case["loan_account_id"],
-                                           "case_id": case["case_id"], "payload": {"reason": "evidence route check"}})
-    a = act.json()
-    rows.append(["POST /api/act (on the top case)", act.status_code,
-                 f"guardrail passed={a['guardrail']['passed']}; region resolved server-side: {a['action']['region']}; "
-                 f"requested_by={a['action']['requested_by']}"])
-    appr = ctx.app("POST", f"/api/actions/{a['action']['id']}/approve")
-    rows.append(["POST /api/actions/{id}/approve (by the same person)", appr.status_code, appr.text[:160]])
+    proposals = []
+    for agent in ("AG024", "AG007"):     # AG024 is not conduct certified; AG007 is certified to 2026-12-01
+        r = ctx.app("POST", "/api/act", json={
+            "action_type": "assign_recovery_agency", "subject": case["loan_account_id"], "case_id": case["case_id"],
+            "payload": {"reason": "evidence route check", "agent_id": agent,
+                        "amount_inr": float(case["outstanding_principal"])}})
+        a = r.json()
+        proposals.append(a)
+        rows.append([f"POST /api/act, assign_recovery_agency with agent {agent}", r.status_code,
+                     f"guardrail passed={a['guardrail']['passed']}; breaches={a['guardrail']['breaches'] or 'none'}; "
+                     f"region resolved server-side: {a['action']['region']}; requested_by={a['action']['requested_by']}"])
+    appr = ctx.app("POST", f"/api/actions/{proposals[-1]['action']['id']}/approve")
+    rows.append(["POST /api/actions/{id}/approve (by the person who raised it)", appr.status_code, appr.text[:160]])
     ask = ctx.app("POST", "/api/ask", json={"question": "How many accounts are on the collections worklist in each region?"})
     rows.append(["POST /api/ask", ask.status_code, ask.text[:160]])
     write("10_app.md", "10 — The Databricks App",
-          "The deployed app serves every screen's route as the signed-in user (on-behalf-of token active), resolves "
-          "an action's region from the governed record rather than the request, and refuses to let the person who "
-          "raised an action approve it.",
+          "The deployed app serves every screen's route as the signed-in user (on-behalf-of token active). The "
+          "bank's conduct control refuses an allocation to an uncertified agent and passes one to a certified agent. "
+          "The action's region comes from the governed record, not the request, and the person who raised an action "
+          "cannot approve it.",
           f"App `{ctx.app_name}` at {ctx.app_url}. On-behalf-of user token active: **{h['obo_active']}**; "
           f"require OBO: **{h['require_obo']}**; Genie agents configured: {h['genie_agents']}.\n\n"
           + table(["route", "HTTP", "response (start)"], rows))
@@ -504,7 +513,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--profile", required=True)
     ap.add_argument("--only", default="", help="comma-separated section numbers, e.g. 01,06")
+    ap.add_argument("--reuse-genie", action="store_true", help="section 08: use the last run's results files")
     a = ap.parse_args()
+    global REUSE_GENIE
+    REUSE_GENIE = a.reuse_genie
     ctx = Ctx(a.profile)
     REDACT[ctx.w.current_user.me().user_name] = "builder@example.com"
     os.makedirs(OUT, exist_ok=True)

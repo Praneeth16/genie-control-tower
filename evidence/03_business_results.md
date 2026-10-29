@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:21 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 03 — Business results
 
-_Generated 2026-10-29 12:21 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** The answers the Chief Risk Officer and the Head of Collections act on, computed from the governed gold tables after the final run. These are the numbers the README and the deck quote.
 

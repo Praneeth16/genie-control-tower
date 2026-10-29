@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:35 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 05 — AI evaluation and the iteration history
 
-_Generated 2026-10-29 12:35 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** Both AI steps are measured: the triage against the ground the grievance desk recorded on each complaint, and the briefs against the bank's deterministic conduct rules and by MLflow Guidelines judges running on a different model family from the generator. Every prompt version and judge version stays in the results, so the iteration is visible, including the regressions.
 

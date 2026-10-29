@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:21 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 01 — Lakeflow pipeline run
 
-_Generated 2026-10-29 12:21 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** The serverless Spark Declarative Pipeline ran from raw files to governed gold, every layer holds rows, and each data-quality expectation reports how many rows passed and failed. Expectation totals are summed across every update since the tables were created, read from the pipeline's own event log.
 
@@ -9,13 +9,13 @@ Pipeline `9fa6adcc-8175-487f-ad73-3f260e63a359`. Most recent updates:
 
 | update_id | state | cause | started (UTC) | refresh |
 |---|---|---|---|---|
+| 7dd133ab-2ff7-47fe-a3f5-46b56a9a1095 | COMPLETED | API_CALL | 2026-10-29 12:22 |  |
 | 84611eaa-8954-404b-a1ff-87e248ddf28a | COMPLETED | JOB_TASK | 2026-10-29 10:28 |  |
 | 0fa48c1b-e9d9-4ab1-874f-ccd92711f507 | COMPLETED | JOB_TASK | 2026-10-29 09:54 |  |
 | 5dcfd5a8-2987-45f6-b178-a17b81be485a | COMPLETED | API_CALL | 2026-10-29 09:50 | core_letter_triage |
 | a90c36b1-6f88-4398-b78b-d7e1e2354f82 | COMPLETED | API_CALL | 2026-10-29 09:07 |  |
-| 8777fb74-06ef-45cc-a38e-cfce5333f985 | FAILED | API_CALL | 2026-10-29 09:06 |  |
 
-Latest update: `84611eaa-8954-404b-a1ff-87e248ddf28a`.
+Latest update: `7dd133ab-2ff7-47fe-a3f5-46b56a9a1095`.
 
 ## Rows per table, by layer
 

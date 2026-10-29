@@ -22,6 +22,9 @@ function CasePanel({ id, onChanged }: { id: number; onChanged: () => void }) {
   const [d, setD] = useState<CaseDetail | null>(null);
   const [form, setForm] = useState({ status: "", owner: "", notes: "", next_action_date: "" });
   const [msg, setMsg] = useState<string | null>(null);
+  // Agency allocation and field visits name the agent who will act. The bank's controls check that agent's
+  // conduct certification, so an uncertified or lapsed agent is refused before anyone approves.
+  const [agent, setAgent] = useState("");
 
   const load = useCallback(() => {
     api.caseDetail(id).then((x) => {
@@ -42,7 +45,8 @@ function CasePanel({ id, onChanged }: { id: number; onChanged: () => void }) {
 
   const propose = (action_type: string) =>
     api.act({ action_type, subject: c.loan_account_id, case_id: c.case_id,
-              payload: { reason: c.ai_explanation ?? c.recommended_treatment, amount_inr: Number(c.outstanding_principal) } })
+              payload: { reason: c.ai_explanation ?? c.recommended_treatment, amount_inr: Number(c.outstanding_principal),
+                         ...(agent ? { agent_id: agent.trim().toUpperCase() } : {}) } })
       .then((r) => { setMsg(r.guardrail.passed
           ? `Proposed. It now needs approval by someone holding the ${r.approver_role ?? "required"} role, and not by you.`
           : `The bank's controls refused it: ${r.guardrail.breaches.join("; ")}`); load(); })
@@ -100,6 +104,10 @@ function CasePanel({ id, onChanged }: { id: number; onChanged: () => void }) {
                     onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </label>
       </div>
+      <label className="block text-[13px]">Agent for an allocation or visit (e.g. AG007)
+        <input className="mt-1 w-40 rounded border border-border bg-background p-1.5 font-mono" value={agent}
+               onChange={(e) => setAgent(e.target.value)} />
+      </label>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={save}>Save case</Button>
         {Object.keys(ACTIONS).map((a) => (
