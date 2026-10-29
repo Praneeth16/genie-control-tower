@@ -26,3 +26,7 @@ app/frontend/tsconfig.tsbuildinfo
 __pycache__/
 *.pyc
 .venv/
+# FE Bar build
+.databricks/
+*.pem
+.code-review-graph/

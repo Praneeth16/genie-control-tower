@@ -1,30 +1,26 @@
-"""Generate the synthetic unstructured corpus for the volumes lane.
+"""The synthetic unstructured corpus: customer letters and the bank's reference documents.
 
 The point of this corpus is CORROBORATION. The structured tables say recovery-conduct complaints in
 Solapur rose during the microfinance stress; these letters say WHY, in the customer's own words. A
 demo where the documents are unrelated to the tables shows a retrieval feature; a demo where they
 explain the same event shows why a bank would want both in one agent.
 
-So every letter is keyed to a REAL complaint_id from the complaints table, and the letters attached to
-Solapur microfinance conduct complaints describe out-of-hours contact — the exact behaviour the RBI
-conduct-hours guardrail refuses. The structured data, the unstructured data and the control all point
-at one story.
+Every letter is keyed to a real complaint_id from the clean book (data/generate_banking_data.py), and
+is written into the correspondence folder of the month it was received, as the grievance desk's scanner
+would drop it. data/landing.py calls this module; it is not run on its own.
 
-Deterministic: the same seed produces the same corpus, so a rehearsed demo does not change under you.
-
-    python3 data/generate_documents.py            # write files to data/documents/
+A letter carries only what a customer would write: who they are, when, where, and what went wrong.
+It used to carry the grievance desk's annotations as well — category code, recorded severity, RBI
+ground. Those are the LABELS, so any model reading the letter could copy the answer instead of
+reading the complaint, and an accuracy score measured on it would have measured nothing. The labels
+stay in the complaints table, which is exactly where the AI triage step is graded against them.
 """
 from __future__ import annotations
 
 import hashlib
-import argparse
-import glob
-import os
 import random
-import sys
 
 SEED = 7
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents")
 
 SYNTHETIC_BANNER = (
     "*** SYNTHETIC DOCUMENT — generated for a Databricks workshop. Not a real customer "
@@ -37,66 +33,47 @@ def _rng(*parts: object) -> random.Random:
     return random.Random(int(hashlib.sha256(key.encode()).hexdigest()[:16], 16))
 
 
-# Complaints taken from the live table so the corpus joins to the structured data on complaint_id.
-# The Solapur microfinance conduct cases are listed first because they carry the narrative.
-CONDUCT_CASES = [
-    ("CM0007205", "2026-04-23", "Medium",   "Resolved",                 "Solapur", "MFI"),
-    ("CM0007800", "2026-05-25", "Critical", "Resolved",                 "Solapur", "MFI"),
-    ("CM0008238", "2026-06-17", "Low",      "Closed - No Deficiency",   "Solapur", "MFI"),
-    ("CM0009530", "2026-08-21", "Medium",   "Open",                     "Solapur", "MFI"),
-    ("CM0002656", "2025-08-01", "Medium",   "Closed - No Deficiency",   "Solapur", "MFI"),
-]
-
 # What the borrower actually complains about. The out-of-hours times are the material fact: they are
 # what makes the conduct-hours control the right answer rather than a theoretical one.
+# (subject, lines, microfinance_only). Two narratives mention a self-help group or a group meeting, which
+# only makes sense for a joint-liability microfinance borrower; picked at random they attached to vehicle
+# and home loans, and a banker reading the letter beside the record would notice immediately.
 CONDUCT_NARRATIVES = [
     ("late-evening visits", [
         "Two men came to my house at 9:15 pm on a Tuesday and again at 8:40 pm two days later.",
         "They stood outside and called out my name loudly so the neighbours could hear.",
         "I told them my group meeting is on Thursday and I would pay then, but they came back anyway.",
-    ]),
+    ], True),
     ("early morning calls", [
         "I received calls at 6:20 am and 6:45 am, before I had left for work.",
         "The caller did not give his name or which agency he was from.",
         "When I asked him to call after 9 am he said the account would be marked wilful default.",
-    ]),
+    ], False),
     ("contacting others about my loan", [
         "The agent spoke to my employer's supervisor about my overdue amount.",
         "He also called two women from my self-help group and told them what I owe.",
         "My group has now asked me to leave, which was not necessary.",
-    ]),
+    ], True),
     ("pressure after a stated hardship", [
         "I had already informed the branch that our shop was shut for six weeks after the flooding.",
         "The agent visited four times in one week including once after 8 pm.",
         "I have never missed a payment before this year.",
-    ]),
+    ], False),
     ("agent would not identify himself", [
         "The person who visited would not show any identity card from the bank or the agency.",
         "He came at 7:50 pm and refused to leave until my husband returned.",
         "We do not know if he was authorised to collect money.",
-    ]),
+    ], False),
 ]
 
-OTHER_COMPLAINTS = [
-    ("CM0008801", "2026-06-17", "UPI",  "High",   "Resolved", "Pune",      "PL",
-     "UPI transfer of INR 12,400 was debited but never credited to the beneficiary. The app showed "
-     "failed but the money left my account. I raised it the same day and was told to wait 7 days."),
-    ("CM0008812", "2026-06-18", "UPI",  "High",   "Resolved", "Mumbai",    "CC",
-     "Three UPI payments failed on 15 June and two were debited twice. I have been charged a late "
-     "fee on my card because the payment did not go through."),
-    ("CM0009104", "2026-07-14", "CHG",  "Medium", "Resolved", "Indore",    "CV",
-     "A processing charge of INR 8,500 was deducted that was never disclosed to me when the vehicle "
-     "loan was sanctioned. I was told the fee would be waived."),
-    ("CM0009377", "2026-08-05", "MIS",  "High",   "Open",     "Bengaluru", "HL",
-     "I was told the insurance policy bundled with my home loan was compulsory. I have since learnt "
-     "it is optional and I would like it cancelled and refunded."),
-]
-
+# (agency, primary agent id, term start, term end). The region is NOT listed here: it is read from the
+# agent's own record, because a hand-typed region drifted from recovery_agents and the agreement then
+# contradicted the table it is supposed to govern.
 AGENCIES = [
-    ("Apex Field Services", "AG001", "West", "2025-04-01", "2027-03-31"),
-    ("Sahyog Associates", "AG012", "Central", "2025-07-01", "2027-06-30"),
-    ("Trident Collections", "AG024", "South", "2024-10-01", "2026-09-30"),
-    ("Nucleus Recovery", "AG019", "West", "2026-01-01", "2028-12-31"),
+    ("Apex Field Services", "AG001", "2025-04-01", "2027-03-31"),
+    ("Sahyog Associates", "AG012", "2025-07-01", "2027-06-30"),
+    ("Trident Collections", "AG024", "2024-10-01", "2026-09-30"),
+    ("Nucleus Recovery", "AG019", "2026-01-01", "2028-12-31"),
 ]
 
 
@@ -170,28 +147,23 @@ OTHER_BODIES: dict[str, list[str]] = {
 }
 
 
-def complaint_letter(cid: str, date: str, severity: str, status: str, city: str,
-                     product: str, body_lines: list[str], subject: str) -> str:
-    r = _rng("letter", cid)
-    ref = f"CUST-LTR-{cid[-6:]}"
+def _header(bank: str, cid: str, date: str, city: str, product: str) -> str:
     return f"""{SYNTHETIC_BANNER}
 
-{BANK} — Customer Grievance Intake
-Document reference : {ref}
-Complaint ID       : {cid}
-Received           : {date}
-Branch city        : {city}
-Product            : {product}
-Recorded severity  : {severity}
-Status at capture  : {status}
-Channel            : Branch walk-in, transcribed by the grievance desk
-
-SUBJECT: {subject}
+{bank} — Customer Grievance Intake (scanned letter)
+Complaint ID : {cid}
+Received     : {date}
+Branch city  : {city}
+Product held : {product}
 
 To the Grievance Redressal Officer,
+"""
 
-I am writing about the conduct of the recovery agents who have been contacting me regarding my
-{product} account.
+
+def conduct_letter(bank: str, cid: str, date: str, city: str, product: str,
+                   body_lines: list[str]) -> str:
+    return _header(bank, cid, date, city, product) + f"""
+I am writing about the recovery agents who have been contacting me regarding my {product} account.
 
 {chr(10).join('  ' + line for line in body_lines)}
 
@@ -203,33 +175,11 @@ I request an acknowledgement of this complaint and the name of the officer handl
 Yours faithfully,
 (name withheld in this synthetic record)
 Account holder, {city}
-
---- grievance desk annotation ---
-Ground of complaint (RBI category) : Recovery agents
-Conduct issue alleged             : contact outside permitted hours; disclosure to third parties
-Agency named by customer          : {r.choice(['Apex Field Services', 'Sahyog Associates', 'Trident Collections'])}
-Field visit log to be reconciled  : yes
 """
 
 
-def other_letter(cid: str, date: str, cat: str, severity: str, status: str, city: str,
-                 product: str, body: str) -> str:
-    return f"""{SYNTHETIC_BANNER}
-
-{BANK} — Customer Grievance Intake
-Document reference : CUST-LTR-{cid[-6:]}
-Complaint ID       : {cid}
-Received           : {date}
-Branch city        : {city}
-Product            : {product}
-Category code      : {cat}
-Recorded severity  : {severity}
-Status at capture  : {status}
-
-SUBJECT: {'Failed UPI transaction not reversed' if cat == 'UPI' else 'Charge levied without disclosure' if cat == 'CHG' else 'Product sold as compulsory'}
-
-To the Grievance Redressal Officer,
-
+def other_letter(bank: str, cid: str, date: str, city: str, product: str, body: str) -> str:
+    return _header(bank, cid, date, city, product) + f"""
 {body}
 
 I would like this resolved and a written reply explaining what went wrong.
@@ -240,7 +190,7 @@ Account holder, {city}
 """
 
 
-def compliance_note() -> str:
+def compliance_note(bank: str) -> str:
     """An INTERNAL policy note, deliberately not a facsimile of an RBI circular.
 
     Writing a document that looked like real regulatory text would be dishonest and would also put
@@ -250,7 +200,7 @@ def compliance_note() -> str:
     """
     return f"""{SYNTHETIC_BANNER}
 
-{BANK} — Internal Compliance Note (SYNTHETIC EXAMPLE)
+{bank} — Internal Compliance Note (SYNTHETIC EXAMPLE)
 Reference : COLL-CONDUCT-NOTE-2026-04
 Issued to : Collections & Recovery, all regions
 Subject   : Borrower contact conduct standards for recovery agents
@@ -329,122 +279,48 @@ COMMERCIAL TERMS
 """
 
 
-SAMPLE_SQL = """
--- Letters are generated FROM the complaints table, not from a hand-written list.
---
--- They used to be hardcoded, and they drifted badly: a letter describing a Solapur microfinance
--- recovery visit sat beside a record saying Indore, passenger-vehicle loan. The Documents tab shows the
--- letter and the record SIDE BY SIDE, so that contradiction was on screen. This is the third time in this
--- project that duplicating a fact instead of deriving it produced a visible inconsistency.
---
--- The sample is weighted: every recovery-conduct complaint that is still open or has reached the
--- ombudsman (those are the ones a conduct committee reads), then a spread of everything else, so the
--- corpus is large enough for semantic retrieval to be doing real work rather than theatre.
-WITH ranked AS (
-  SELECT c.complaint_id, c.received_date, c.category_code, cc.rbi_category, cc.category_name,
-         c.severity, c.status, c.product_code, b.city, b.region,
-         c.escalated_to_ombudsman, c.repeat_complainant, c.sla_breached, c.sla_days,
-         CASE
-           WHEN c.category_code = 'REC' AND (c.status = 'Open' OR c.escalated_to_ombudsman) THEN 0
-           WHEN c.category_code = 'REC' THEN 1
-           WHEN c.status = 'Open' OR c.escalated_to_ombudsman THEN 2
-           ELSE 3
-         END AS priority
-  FROM {FQ}.complaints c
-  JOIN {FQ}.complaint_categories cc ON c.category_code = cc.category_code
-  JOIN {FQ}.branch_master b ON c.branch_id = b.branch_id
-),
--- Cap each band separately. A single LIMIT filled the whole corpus with recovery-conduct letters,
--- because there are more of those than the cap, and a corpus of one ground turns "semantic search"
--- into a category filter that SQL already does better.
-numbered AS (
-  SELECT *, ROW_NUMBER() OVER (PARTITION BY priority ORDER BY complaint_id) AS rn,
-         ROW_NUMBER() OVER (PARTITION BY priority, rbi_category ORDER BY complaint_id) AS rn_ground
-  FROM ranked
-)
-SELECT complaint_id, received_date, category_code, rbi_category, category_name, severity, status,
-       product_code, city, region, escalated_to_ombudsman, repeat_complainant, sla_breached, sla_days,
-       priority
-FROM numbered
-WHERE (priority = 0)                      -- every open or escalated recovery-conduct case
-   OR (priority = 1 AND rn <= 150)        -- a sample of the rest of the conduct book
-   OR (priority = 2 AND rn <= 150)        -- open or escalated on other grounds
-   OR (priority = 3 AND rn_ground <= 45)  -- a spread across every other ground, evenly
-ORDER BY priority, complaint_id
-"""
+def select_letters(complaints: list[dict]) -> list[dict]:
+    """Which complaints arrive as a letter.
+
+    Weighted: every recovery-conduct complaint that is still open or has reached the ombudsman (those
+    are the ones a conduct committee reads), then a sample of the rest of the conduct book and of other
+    open or escalated cases, then an even spread across every other ground. Each band is capped on its
+    own: a single cap filled the corpus with conduct letters, and a corpus of one ground turns semantic
+    search into a category filter that SQL already does better.
+    """
+    def band(c: dict) -> int:
+        open_or_esc = c["status"] == "Open" or c["escalated_to_ombudsman"]
+        if c["category_code"] == "REC":
+            return 0 if open_or_esc else 1
+        return 2 if open_or_esc else 3
+
+    picked, seen = [], {}
+    for c in sorted(complaints, key=lambda c: (band(c), c["complaint_id"])):
+        b = band(c)
+        key = (b, c["rbi_category"]) if b == 3 else (b,)
+        seen[key] = seen.get(key, 0) + 1
+        cap = {0: None, 1: 150, 2: 150, 3: 45}[b]
+        if cap is None or seen[key] <= cap:
+            picked.append(c)
+    return picked
 
 
-def fetch_complaints() -> list[dict]:
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
-    import sqlx
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                    "app", "backend"))
-    import config
-    fq = config.FQ
-    out = sqlx.run(SAMPLE_SQL.replace("{FQ}", fq), quiet=True, max_rows=1000)
-    return [dict(zip(out["columns"], row)) for row in out["rows"]]
+def render_letter(bank: str, c: dict) -> str:
+    cid, date, city, product = c["complaint_id"], c["received_date"], c["city"], c["product_code"]
+    if c["category_code"] == "REC":
+        # Seeded by complaint id, so the same complaint always yields the same letter.
+        options = [n for n in CONDUCT_NARRATIVES if product == "MFI" or not n[2]]
+        _, lines, _ = options[_rng("pick", cid).randrange(len(options))]
+        return conduct_letter(bank, cid, date, city, product, lines)
+    body = OTHER_BODIES.get(c["category_code"], OTHER_BODIES["KYC"])
+    return other_letter(bank, cid, date, city, product, _rng("body", cid).choice(body))
 
 
-def _truthy(v) -> bool:
-    return str(v).strip().lower() in ("true", "1", "t", "yes")
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--limit", type=int, default=0, help="cap the corpus (0 = no cap)")
-    args = ap.parse_args()
-
-    os.makedirs(os.path.join(OUT, "complaints"), exist_ok=True)
-    os.makedirs(os.path.join(OUT, "compliance"), exist_ok=True)
-    os.makedirs(os.path.join(OUT, "agencies"), exist_ok=True)
-    # Old hand-written letters would otherwise linger and contradict the data forever.
-    for stale in glob.glob(os.path.join(OUT, "complaints", "*.txt")):
-        os.remove(stale)
-
-    rows = fetch_complaints()
-    if args.limit:
-        rows = rows[: args.limit]
-    written = conduct = 0
-
-    for row in rows:
-        cid = row["complaint_id"]
-        date = str(row["received_date"])[:10]
-        sev, status = row["severity"], row["status"]
-        city, product = row["city"], row["product_code"]
-        if row["category_code"] == "REC":
-            # Vary the narrative so retrieval has something to discriminate on. Seeded by complaint id,
-            # so the same complaint always yields the same letter.
-            r = _rng("pick", cid)
-            subject, lines = CONDUCT_NARRATIVES[r.randrange(len(CONDUCT_NARRATIVES))]
-            text = complaint_letter(cid, date, sev, status, city, product, lines,
-                                    f"Conduct of recovery agents — {subject}")
-            conduct += 1
-        else:
-            body = OTHER_BODIES.get(row["category_code"], OTHER_BODIES["KYC"])
-            r = _rng("body", cid)
-            text = other_letter(cid, date, row["category_code"], sev, status, city, product,
-                                r.choice(body))
-        # Escalation and SLA state come from the record, so the letter cannot claim otherwise.
-        annot = [f"Escalated to RBI Ombudsman         : {'yes' if _truthy(row['escalated_to_ombudsman']) else 'no'}",
-                 f"Repeat complainant                 : {'yes' if _truthy(row['repeat_complainant']) else 'no'}",
-                 f"SLA (days) for this ground         : {row['sla_days']}",
-                 f"SLA breached as at 2026-08-31      : {'yes' if _truthy(row['sla_breached']) else 'no'}",
-                 f"RBI ground of complaint            : {row['rbi_category']}"]
-        text = text.rstrip() + "\n" + "\n".join(annot) + "\n"
-        open(os.path.join(OUT, "complaints", f"{cid}.txt"), "w").write(text)
-        written += 1
-
-    open(os.path.join(OUT, "compliance", "COLL-CONDUCT-NOTE-2026-04.txt"), "w").write(compliance_note())
-    written += 1
-    for (name, agent_id, region, start, end) in AGENCIES:
+def reference_documents(bank: str, agent_region: dict[str, str]) -> dict[str, str]:
+    """relative path -> text, for the compliance note and the agency agreements."""
+    docs = {"compliance/COLL-CONDUCT-NOTE-2026-04.txt": compliance_note(bank)}
+    for name, agent_id, start, end in AGENCIES:
         slug = name.lower().replace(" ", "_")
-        open(os.path.join(OUT, "agencies", f"{slug}_agreement.txt"), "w").write(
-            agency_agreement(name, agent_id, region, start, end))
-        written += 1
-
-    print(f"wrote {written} documents under {OUT}  ({conduct} recovery-conduct letters)")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+        docs[f"agencies/{slug}_agreement.txt"] = agency_agreement(
+            name, agent_id, agent_region[agent_id], start, end)
+    return docs

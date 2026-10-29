@@ -1,0 +1,79 @@
+# Two jobs carry the whole journey.
+#
+#   ct_setup  once: storage, synthetic source files, governance policy, Lakebase schema.
+#   ct_cycle  every time a source drop completes: pipeline -> governance -> AI briefs -> {AI evaluation,
+#             Lakebase case sync} -> verification. Triggered by FILE ARRIVAL on the manifests folder, which
+#             every sender writes LAST, so a run starts only once a drop is complete.
+
+variables:
+  py_env_dependencies:
+    description: Shared Python dependencies for serverless job tasks.
+    type: complex
+    default:
+      - databricks-sdk>=0.96
+      - "psycopg[binary]>=3.1"
+
+resources:
+  jobs:
+    ct_setup:
+      name: genie-control-tower-setup
+      max_concurrent_runs: 1
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies: ${var.py_env_dependencies}
+      tasks:
+        - task_key: storage
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/storage.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}"]
+        - task_key: generate_source_files
+          depends_on: [{task_key: storage}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../data/generate_banking_data.py
+            parameters: [--landing, "/Volumes/${var.uc_catalog}/${var.uc_schema}/landing",
+                         --holdback, "/Volumes/${var.uc_catalog}/${var.uc_schema}/holdback",
+                         --bank, "${var.bank_name}"]
+        - task_key: governance_policy
+          depends_on: [{task_key: storage}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/policies.sql, --file, governance/access.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}",
+                         --var, "ADMIN_PRINCIPAL=${workspace.current_user.userName}",
+                         --var, "PSEUDONYM_SALT=${var.pseudonym_salt}",
+                         --var, "CRO=${var.persona_cro}", --var, "COLLECTIONS_HEAD=${var.persona_collections_head}",
+                         --var, "GRIEVANCE_OFFICER=${var.persona_grievance_officer}", --var, "AUDITOR=${var.persona_auditor}"]
+
+    ct_cycle:
+      name: genie-control-tower-cycle
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      trigger:
+        pause_status: UNPAUSED
+        file_arrival:
+          url: /Volumes/${var.uc_catalog}/${var.uc_schema}/landing/_manifests/
+          min_time_between_triggers_seconds: 60
+          wait_after_last_change_seconds: 60
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies: ${var.py_env_dependencies}
+      tasks:
+        - task_key: refresh_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.control_tower.id}
+        - task_key: govern
+          depends_on: [{task_key: refresh_pipeline}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/action_functions.sql, --file, governance/tags.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}"]

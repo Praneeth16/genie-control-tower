@@ -7,17 +7,14 @@ generic Indian private-sector bank so the demo questions feel real.
 Seed is fixed (7) so every run produces identical data — required so benchmark
 ground-truth SQL stays valid between runs.
 
-Three domains, each sized for the Genie accuracy sweet spot (5-7 tables per agent):
-
-  COLLECTIONS  loan_accounts, delinquency_daily, collections_activity,
-               recovery_agents, repayment_schedule, branch_master
-  GRIEVANCE    complaints, complaint_categories, upi_disputes, chargebacks,
-               sla_tracker, branch_master
-  RM           relationship_managers, rm_targets, rm_achievement,
-               customer_portfolio, product_holdings, incentive_slabs
+This module builds the bank's CLEAN book of record. It is not what lands in the lakehouse:
+data/landing.py turns it into the files each source system would actually send — split by month,
+with each system's own field names, derived fields removed, and the planted defects the pipeline must
+catch. The Lakeflow pipeline then has to rebuild this clean book from those files, and the answer key
+says exactly how far it should get.
 
 The narrative (what the agents must be able to explain):
-  1. A microfinance (BFIL-style) repayment shock in the SOLAPUR district from 2026-04,
+  1. A microfinance (joint-liability group lending) repayment shock in the SOLAPUR district from 2026-04,
      worst in 2026-05, partially recovering by 2026-07. Driven by an external event, so
      collections effort rose while recovery rate fell.
   2. A commercial-vehicle delinquency spike in INDORE from 2026-03, concentrated in
@@ -29,7 +26,6 @@ The narrative (what the agents must be able to explain):
 """
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import hashlib
 import random
@@ -564,7 +560,8 @@ def build_upi_disputes():
     reasons = ["Timeout at beneficiary bank", "Beneficiary bank declined",
                "Insufficient balance", "Invalid VPA", "Switch degradation",
                "Debit success credit pending", "Duplicate submission"]
-    psps = ["@indus", "@okaxis", "@ybl", "@paytm", "@apl", "@ibl"]
+    # Invented handles. Real PSP suffixes would tie a synthetic dispute book to real institutions.
+    psps = ["@demobank", "@quickpay", "@railpay", "@citywallet", "@bharatpe-demo", "@upisim"]
     rows = []
     did = 0
     for month in MONTHS:
@@ -608,7 +605,9 @@ def build_chargebacks():
     for i in range(4200):
         rng = _rng("cb", i)
         txn = dt.date(2025, 3, 1) + dt.timedelta(days=rng.randint(0, 540))
-        raised = txn + dt.timedelta(days=rng.randint(1, 45))
+        # Clamped to the as-of date. Unclamped, a late transaction produced a chargeback "raised" up to five
+        # weeks in the future, which no source system can send.
+        raised = min(txn + dt.timedelta(days=rng.randint(1, 45)), AS_OF)
         reason = rng.choice(reasons)
         fraud = reason.startswith("Fraud")
         amount = round(rng.uniform(500, 120000), 2)
@@ -623,62 +622,6 @@ def build_chargebacks():
             round(amount * rng.uniform(0.6, 1.0), 2) if status == "Won" else 0.0,
         ))
     return "chargebacks", cols, rows
-
-
-def build_sla_tracker(complaint_rows, complaint_cols):
-    """Monthly SLA rollup by branch and RBI category, DERIVED FROM complaints.
-
-    It used to be generated independently with its own random numbers, and the two tables disagreed
-    violently: the rollup claimed 56,009 complaints received against an actual 9,660, and 1,562
-    ombudsman escalations against 239 — a 6.5x overstatement. Both tables are in the same schema and
-    both are legitimate things for an agent to reach for, so "how many complaints did we get" had two
-    contradictory answers and no way to tell which one you were given. A pre-aggregated table that
-    disagrees with its own detail table is worse than not having one, and it is the single fastest way
-    to lose an analytics team's trust.
-
-    It still exists for the reason it always did — it keeps common grievance questions off 9,660 raw
-    rows, which is the truncation defence — but it is now a genuine rollup. Cells with no complaints are
-    absent rather than invented, so the table is smaller than it was and every number in it reconciles.
-    """
-    cols = ["report_month", "branch_id", "region", "rbi_category",
-            "complaints_received", "complaints_resolved", "within_sla",
-            "breached_sla", "avg_days_to_resolve", "ombudsman_escalations"]
-    ix = {c: i for i, c in enumerate(complaint_cols)}
-    region_of = {b[0]: b[4] for b in BRANCHES}
-    rbi_of = {c[0]: c[2] for c in COMPLAINT_CATEGORIES}
-
-    agg: dict[tuple[str, str, str], dict] = {}
-    for row in complaint_rows:
-        received = row[ix["received_date"]]
-        month = received[:7] + "-01"
-        bid = row[ix["branch_id"]]
-        cat = rbi_of[row[ix["category_code"]]]
-        e = agg.setdefault((month, bid, cat), {
-            "received": 0, "resolved": 0, "breached": 0, "tat_sum": 0, "tat_n": 0, "omb": 0})
-        e["received"] += 1
-        if row[ix["status"]] != "Open":
-            e["resolved"] += 1
-            ttr = row[ix["days_to_resolve"]]
-            if ttr is not None:
-                e["tat_sum"] += int(ttr)
-                e["tat_n"] += 1
-        if row[ix["sla_breached"]]:
-            e["breached"] += 1
-        if row[ix["escalated_to_ombudsman"]]:
-            e["omb"] += 1
-
-    rows = []
-    for (month, bid, cat), e in sorted(agg.items()):
-        # breached_sla counts every breach, open or closed, exactly as complaints.sla_breached does.
-        # within_sla is therefore received minus breached, not resolved minus breached — otherwise the
-        # two columns cannot be added back to the total the detail table reports.
-        rows.append((
-            month, bid, region_of[bid], cat,
-            e["received"], e["resolved"], e["received"] - e["breached"], e["breached"],
-            round(e["tat_sum"] / e["tat_n"], 1) if e["tat_n"] else None,
-            e["omb"],
-        ))
-    return "sla_tracker", cols, rows
 
 
 def build_relationship_managers():
@@ -844,7 +787,6 @@ def build_all():
         complaints,
         build_upi_disputes(),
         build_chargebacks(),
-        build_sla_tracker(complaints[2], complaints[1]),
         build_relationship_managers(),
         build_incentive_slabs(),
         build_rm_targets(),
@@ -856,53 +798,14 @@ def build_all():
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out", default="out", help="output directory for CSV files")
-    ap.add_argument("--summary-only", action="store_true", help="print row counts, write nothing")
-    args = ap.parse_args()
-
-    import csv
-    import json
     import os
-
-    tables = build_all()
-    if not args.summary_only:
-        os.makedirs(args.out, exist_ok=True)
-
-    print(f"{'table':<26} {'rows':>10}  columns")
-    print("-" * 78)
-    for name, cols, rows in tables:
-        print(f"{name:<26} {len(rows):>10,}  {len(cols)}")
-        if args.summary_only:
-            continue
-        path = os.path.join(args.out, f"{name}.csv")
-        with open(path, "w", newline="") as fh:
-            w = csv.writer(fh)
-            w.writerow(cols)
-            w.writerows(rows)
-    total = sum(len(r) for _, _, r in tables)
-    print("-" * 78)
-    print(f"{'TOTAL':<26} {total:>10,}")
-    if not args.summary_only:
-        # The guardrail engine checks that its identity can see the WHOLE book, which means it needs to
-        # know how big the book is. Those counts used to be copied into guardrails.py by hand, which is
-        # a landmine: regenerate the data and the control sees fewer rows than its hardcoded constant,
-        # concludes it is being row-filtered, and FAILS CLOSED. The app then refuses to serve and looks
-        # like a security incident rather than a stale number. Emit the counts as data instead.
-        # Written into app/backend/ because that is where it is CONSUMED, and because it has to be a
-        # shipped artefact rather than something read back from the warehouse at startup. The whole
-        # point of the check is to compare what the guardrail identity can see against an expectation
-        # formed independently of it — an expectation queried at runtime would agree with a row filter
-        # instead of catching it.
-        counts = {name: len(rows) for name, _, rows in tables}
-        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        for manifest in (os.path.join(repo, "data", "row_counts.json"),
-                         os.path.join(repo, "app", "backend", "row_counts.json")):
-            with open(manifest, "w") as fh:
-                json.dump(counts, fh, indent=2, sort_keys=True)
-            print(f"Wrote row-count manifest to {manifest}")
-        print(f"\nWrote {len(tables)} CSVs to {args.out}/")
+    import sys
+    # Serverless job tasks exec this file without __file__, but argv[0] is still its path.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[0])))
+    import landing
+    return landing.main()
 
 
 if __name__ == "__main__":
+    # Not sys.exit(main()): serverless job tasks report SystemExit(0) as a failure.
     main()
