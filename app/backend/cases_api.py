@@ -147,7 +147,7 @@ def build_cases_router() -> APIRouter:
         return {"kpis": kpis, "conduct": conduct, "worklist_by_region": worklist,
                 "completeness": completeness, "breaks": breaks, "quality": quality, "ai_quality": ai,
                 "journey": [
-                    {"stage": "Lakeflow", "what": "18 source feeds landed as files, read incrementally, conformed, "
+                    {"stage": "Lakeflow", "what": "18 structured feeds and the letters landed as files, read incrementally, conformed, "
                                                   "quarantined with reasons, reconciled to sender manifests"},
                     {"stage": "Unity Catalog", "what": "row filters and masks on every gold table, entitlements as data"},
                     {"stage": "AI", "what": "letters triaged in the pipeline; worklist briefs; judged by a different model family"},

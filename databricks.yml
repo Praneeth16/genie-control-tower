@@ -165,7 +165,7 @@ variables:
     default: projects/${var.lakebase_project}/branches/production/endpoints/primary
   brief_prompt_version:
     description: Prompt version for the case briefs (see ai/case_brief.sql).
-    default: v3
+    default: v4
   persona_cro:
     description: Application id of the service principal standing in for the Chief Risk Officer.
   persona_collections_head:

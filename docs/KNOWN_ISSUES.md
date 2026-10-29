@@ -1,5 +1,20 @@
 # Known issues
 
+## Fixed in the FE Bar build
+
+- Separation of duties now applies to people. The proposer of an action is the signed-in person, not the
+  agent, so whoever asked for an action cannot approve it.
+- The guardrail's region check reads the region from the governed record, not from the request body.
+- Executing an approved action requires the approver role.
+- A rejection is recorded in `rejected_by`, not `approved_by`.
+- `complaint_documents` is governed: letters follow their complaint's region and their text is masked.
+- The space instructions no longer contain benchmark answers, and the RM space's literal-value rule and its
+  example SQL agree.
+- The guardrail's expected counts come from `gold_row_counts`, which the pipeline computes, not from a
+  manifest file that went stale when the data was rebuilt.
+- Install is the bundle. Genie space ids and the dashboard id come from the bundle; nothing is copied by hand.
+
+
 Written after an independent static audit of this repository. Everything below is either **fixed** and
 recorded because the failure mode is instructive, or **open** and listed so nothing here is overclaimed.
 
@@ -57,27 +72,18 @@ by the held-out suite and **deliberately left unfixed**, because tuning against 
 the only honest measurement available. Fix by instructing pre-aggregation in a CTE, then measure on a *new*
 held-out set.
 
-**Action execution is not authorised per caller.** `/api/actions` lists every action rather than the
-caller's, and the execute route does not check that the caller is entitled to execute *that* action. The
-approval step records a named approver, so the lineage is honest about who approved — but a second app user
-could trigger execution of an action approved by someone else. `guardrails.authorise_approver()` exists and
-is applied at approval; it needs applying at execution too, with listing scoped to the caller.
+**The action list is not scoped to the caller.** `/api/actions` lists every action the agent raised,
+not only those in the caller's regions. Execution now requires the approver role (fixed in the FE Bar
+build), so a second user can no longer execute an action they could not approve.
 
-**Action lineage is append-only by convention, not by the database.** State changes and event inserts are
-separate autocommit calls, so a crash between them can leave a state change without its event, and there is
-no trigger or privilege preventing `UPDATE`/`DELETE` on the events table. `DELETE` is withheld from the
-app's role, which is not the same thing. Fix: wrap the transition and its event in one transaction, and add
-a rule or trigger that rejects mutation of `action_events`.
+**An action's state change and its event are separate writes.** A crash between them can leave a state
+change without its event. The events table itself is now append-only by trigger (`lakebase/006`), so the
+lineage cannot be rewritten. Fix the remainder by wrapping the transition and its event in one transaction.
 
 **The connector interpolates values into SQL rather than binding them.** `ALTER CONNECTION` embeds a
 freshly minted bearer token and `http_request` embeds the JSON payload, both by string interpolation with
 manual quoting. Quoting stops it breaking; it does not stop a token and a customer payload appearing in
 query history and diagnostics. Fix: bind parameters, and source the token from a secret scope.
-
-**`complaint_documents` is not governed.** Row filters and column masks are applied to the structured
-tables; the parsed document table has neither, and being in the same schema inherits nothing. The letters
-contain no customer names by construction, which limits the exposure but is not a control. Fix: apply the
-branch row filter and a text mask.
 
 **The voice lane can report a green verdict on no evidence.** When no loan or complaint resolves, the
 grievance check reads zero open complaints and passes, and the NPA check disappears entirely rather than
@@ -94,15 +100,19 @@ turn can return a complete answer with broken provenance. Document search and li
 infrastructure errors into HTTP 200 with an "unavailable" note. Degrading is right; degrading *silently* is
 not — these should surface a warning in the response the UI renders.
 
-**`/api/health` and the approver directory are unauthenticated.** Health exposes the service identity,
-catalog, schema, warehouse and Lakebase names to any app user; the approver directory lists every approver
-without an admin check.
+**`/api/health` is open to any app user.** It shows the service identity, catalog, schema, warehouse and
+Lakebase names. The approver directory now requires the administrator role (fixed in the FE Bar build).
 
-**Install is not one command.** The Genie space ids and dashboard id must be copied back into configuration
-between steps, and the app code deploy is a separate stage from `bundle deploy` because
-`apps deploy --source-code-path` reads `app.yaml` from the source path and ignores the bundle's `config`.
-`scripts/render_app_yaml.py` bridges that; the README's sequence is accurate but it is genuinely several
-commands, not one.
+**The Lakebase sync aborted once.** In the first full cycle, `serve/sync_cases.py` ended with a SIGABRT
+and succeeded on retry. The cause is not known. The task retries twice, which is safe because the upsert is
+idempotent.
+
+**Some letters' ground is ambiguous.** After prompt v2, the letter triage disagrees with the recorded ground
+on 21 of 690 letters, all deposit account complaints about charges. Either label is defensible, so the
+recorded ground stays the source of truth and the AI ground is shown as a reading of the letter.
+
+**Vector search is off in this build.** The semantic search over letters needs a Vector Search endpoint and
+index over `complaint_documents`, which this deployment does not create.
 
 ---
 

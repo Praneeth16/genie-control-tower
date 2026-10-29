@@ -133,7 +133,9 @@ def main() -> None:
                b.error, p.recommended_treatment
         FROM {fq}.collections_case_brief b
         JOIN {fq}.collections_priority p USING (loan_account_id)
-        WHERE b.prompt_version = '{a.brief_prompt_version}'""").collect()
+        -- Only briefs written from the CURRENT month-end facts: a brief kept from an earlier month for an
+        -- account still on the list would otherwise be judged against facts it was not written from.
+        WHERE b.prompt_version = '{a.brief_prompt_version}' AND b.snapshot_month = p.snapshot_month""").collect()
     if briefs:
         version, model = a.brief_prompt_version, briefs[0]["model"]
         ok = [r for r in briefs if r["error"] is None and r["explanation"]]

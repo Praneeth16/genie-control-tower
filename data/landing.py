@@ -487,5 +487,8 @@ def main() -> int:
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             with open(path, "w") as fh:
                 fh.write(md)
+            # The same counts as data, so the evidence pack can check the pipeline against them.
+            with open(os.path.join(os.path.dirname(os.path.abspath(path)), "_answer_key.json"), "w") as fh:
+                json.dump(k, fh, indent=1, sort_keys=True)
     print(md)
     return 0

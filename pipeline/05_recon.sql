@@ -124,6 +124,8 @@ UNION ALL SELECT 'collections_activity', 'de-duplicated', 're-sent copy of a con
                  count(*) - count(DISTINCT activity_id) FROM silver_collections_activity
 UNION ALL SELECT 'complaints', 'de-duplicated', 're-sent copy of a complaint already received',
                  count(*) - count(DISTINCT complaint_id) FROM silver_complaints
+-- Distinct contacts, not rows: a late call the vendor also re-sent would otherwise be counted twice.
 UNION ALL SELECT 'collections_activity', 'late', 'contact uploaded in a later month\'s file',
-                 count_if(date_format(contact_ts_ist, 'yyyy-MM') <> regexp_extract(_source_path, '(\\d{4}-\\d{2})', 1))
+                 count(DISTINCT CASE WHEN date_format(contact_ts_ist, 'yyyy-MM') <> regexp_extract(_source_path, '(\\d{4}-\\d{2})', 1)
+                                     THEN activity_id END)
           FROM silver_collections_activity;

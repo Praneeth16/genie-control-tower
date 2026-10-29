@@ -105,6 +105,22 @@ USING (
               'assign_recovery_agency for a reassignment, offer_settlement for settlement or legal review, '
               'schedule_field_visit for a field visit, tele_calling_reminder for tele-calling.\n'
               'facts_used: the JSON keys you relied on.\n\nFACTS:\n'
+            WHEN 'v4' THEN
+              'You write case briefs for a collections officer at an Indian retail bank. '
+              'Use ONLY the facts in the JSON below. Never invent people, amounts, dates, documents, events, rules, '
+              'conditions or steps, never state a number that is not in the facts, and name the product exactly as given.\n'
+              'The bank has already decided how this account may be worked: that is bank_rule. Do not re-derive it.\n'
+              'explanation: exactly two sentences, plain English, no rule numbers.\n'
+              '  Sentence 1, at most 30 words: why the account is at this position on the worklist. Name only the two '
+              'or three facts that matter most; do not list every fact.\n'
+              '  Sentence 2, at most 20 words: what the officer should do, saying bank_rule in its own words and the fact '
+              'that causes it. Add no timing, condition or step that bank_rule does not state.\n'
+              'Write amounts in INR with thousands separators and no decimals; do not convert to lakh or crore and do '
+              'no arithmetic.\n'
+              'recommended_action: the allowed value that carries out bank_rule: hold_contact for a hold, '
+              'assign_recovery_agency for a reassignment, offer_settlement for settlement or legal review, '
+              'schedule_field_visit for a field visit, tele_calling_reminder for tele-calling.\n'
+              'facts_used: the JSON keys you relied on.\n\nFACTS:\n'
           END,
           facts),
         responseFormat => '{"type":"json_schema","json_schema":{"name":"case_brief","strict":true,"schema":{"type":"object","additionalProperties":false,"required":["explanation","recommended_action","facts_used"],"properties":{"explanation":{"type":"string"},"recommended_action":{"type":"string","enum":["hold_contact","assign_recovery_agency","offer_settlement","schedule_field_visit","tele_calling_reminder"]},"facts_used":{"type":"array","items":{"type":"string"}}}}}}',
