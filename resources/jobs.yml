@@ -50,6 +50,13 @@ resources:
                          --var, "CRO=${var.persona_cro}", --var, "COLLECTIONS_HEAD=${var.persona_collections_head}",
                          --var, "GRIEVANCE_OFFICER=${var.persona_grievance_officer}", --var, "AUDITOR=${var.persona_auditor}"]
 
+        - task_key: lakebase_schema
+          environment_key: default
+          spark_python_task:
+            python_file: ../scripts/lakebase_migrate.py
+            parameters: [--root, "${workspace.file_path}", --endpoint, "${var.lakebase_endpoint}",
+                         --schema, "${var.lakebase_schema}"]
+
     ct_cycle:
       name: genie-control-tower-cycle
       max_concurrent_runs: 1
@@ -66,6 +73,11 @@ resources:
           spec:
             environment_version: "3"
             dependencies: ${var.py_env_dependencies}
+        - environment_key: ai_eval
+          spec:
+            environment_version: "3"
+            dependencies:
+              - "mlflow[databricks]>=3.4"
       tasks:
         - task_key: refresh_pipeline
           pipeline_task:
@@ -77,3 +89,41 @@ resources:
             python_file: ../tools/run_sql.py
             parameters: [--root, "${workspace.file_path}", --file, governance/action_functions.sql, --file, governance/tags.sql,
                          --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}"]
+        - task_key: case_briefs
+          depends_on: [{task_key: govern}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, ai/case_brief.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}",
+                         --var, "AI_MODEL=${var.ai_model}", --var, "BRIEF_PROMPT_VERSION=${var.brief_prompt_version}",
+                         --var, "TOP_N=200"]
+        - task_key: evaluate_ai
+          depends_on: [{task_key: case_briefs}]
+          environment_key: ai_eval
+          spark_python_task:
+            python_file: ../ai/evaluate.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}",
+                         --judge-model, "${var.judge_model}", --experiment, "${var.mlflow_experiment}",
+                         --brief-prompt-version, "${var.brief_prompt_version}"]
+        - task_key: sync_cases
+          depends_on: [{task_key: case_briefs}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../serve/sync_cases.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}",
+                         --endpoint, "${var.lakebase_endpoint}", --pg-schema, "${var.lakebase_schema}"]
+
+    ct_land_period:
+      name: genie-control-tower-land-next-period
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+      tasks:
+        - task_key: land
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/land_next_period.py
+            parameters: [--holdback, "/Volumes/${var.uc_catalog}/${var.uc_schema}/holdback",
+                         --landing, "/Volumes/${var.uc_catalog}/${var.uc_schema}/landing"]

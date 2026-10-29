@@ -20,6 +20,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 import identity
+import config
+import databricks_client as dbx
 from action_plane import (
     ActionNotFound,
     ActionPlane,
@@ -34,7 +36,9 @@ class ActReq(BaseModel):
     action_type: str
     subject: str
     payload: dict[str, Any]
+    # Ignored when the subject resolves to a governed record: see _subject_scope.
     region: Optional[str] = None
+    case_id: Optional[int] = None
     level: int = 2
     # The time the action would take effect. First-class because the RBI conduct-hours control keys
     # on it, and editable in the UI so a reviewer can see the control refuse an out-of-hours slot.
@@ -54,6 +58,19 @@ def _end_user(request: Request, agent_name: str) -> str:
     return identity.user_email(request, fallback_tag=agent_name)
 
 
+def _subject_scope(subject: str) -> tuple[Optional[str], Optional[str]]:
+    """The region and branch of the record an action is about, read by the SERVER as the guardrail
+    identity. The region check used to trust the region in the request body, so a proposal could pass the
+    regional sanction by simply claiming a different region."""
+    table = {"LN": "loan_accounts WHERE loan_account_id", "CM": "complaints WHERE complaint_id",
+             "RM": "relationship_managers WHERE rm_id"}.get(subject[:2].upper())
+    if not table:
+        return None, None
+    rows = dbx.run_sql(f"SELECT region, branch_id FROM {config.FQ}.{table} = :s",
+                       parameters={"s": (subject, "STRING")})["rows"]
+    return (rows[0]["region"], rows[0]["branch_id"]) if rows else (None, None)
+
+
 def build_actions_router(agent_name: str) -> APIRouter:
     """Return an APIRouter exposing the Act→Approve→Execute loop for `agent_name`."""
     router = APIRouter(prefix="/api")
@@ -63,22 +80,24 @@ def build_actions_router(agent_name: str) -> APIRouter:
     def act(req: ActReq, request: Request):
         """Stage an action through the Action Plane + return its guardrail verdict."""
         try:
-            # The AGENT proposes the action (it advised it); the human then APPROVES it. Attributing
-            # the proposal to the agent (not the signed-in user) is the correct separation of duties:
-            # proposer (agent) != approver (human), so a single signed-in user can approve in the UI
-            # without a second identity or an admin panel.
+            # The proposer is the PERSON who asked for the action, whichever agent drafted it. It used to
+            # be the agent's name, which made separation of duties decorative: the approver's email never
+            # equals an agent name, so whoever asked could approve their own request. Now a person's
+            # request needs a different person to approve it.
+            region, branch = _subject_scope(req.subject)
             action = ap.propose(
                 agent=agent_name,
                 action_type=req.action_type,
                 subject=req.subject,
                 payload=req.payload,
-                region=req.region,
-                requested_by=agent_name,
+                region=region or req.region,
+                requested_by=_end_user(request, agent_name),
                 level=req.level,
                 scheduled_at=req.scheduled_at,
-                branch_id=req.branch_id,
+                branch_id=branch or req.branch_id,
                 session_uuid=req.session_uuid,
                 trace_id=req.trace_id,
+                case_id=req.case_id,
             )
             # Evaluate immediately and RECORD the verdict, so the reviewer sees the controls before
             # deciding and the trail shows what was known at proposal time.
@@ -165,9 +184,17 @@ def build_actions_router(agent_name: str) -> APIRouter:
             raise HTTPException(500, f"reject failed: {e}")
 
     @router.post("/actions/{action_id}/execute")
-    def execute_action(action_id: int):
-        """Execute an approved action through its connector(s); return final action."""
+    def execute_action(action_id: int, request: Request):
+        """Execute an approved action through its connector(s); return final action.
+
+        Needs the same role authority as approval. Anyone could execute an approved action before, so an
+        approval by the right person could be acted on by the wrong one."""
         try:
+            actor = _end_user(request, agent_name)
+            allowed, reason = authorise_approver(ap.get(action_id), actor)
+            if not allowed and "separation of duties" not in reason:
+                ap._event(action_id, "execution_refused", actor, {"reason": reason})
+                raise HTTPException(403, reason)
             result = execute(action_id, ap=ap)
             if isinstance(result, dict) and result.get("error") == "not_approved":
                 raise HTTPException(409, result["message"])

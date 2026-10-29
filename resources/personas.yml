@@ -1,0 +1,53 @@
+# One small job per persona, each running eval/persona_probe.py AS that persona's service principal.
+# The evidence pack (06_governance.md) runs all four and compares what each identity got back from the
+# same queries. Manual trigger only.
+
+probe_task: &probe_task
+  task_key: probe
+  environment_key: default
+  spark_python_task:
+    python_file: ../eval/persona_probe.py
+
+probe_env: &probe_env
+  - environment_key: default
+    spec:
+      environment_version: "3"
+
+resources:
+  jobs:
+    ct_probe_cro:
+      name: genie-control-tower-probe-cro
+      run_as: {service_principal_name: "${var.persona_cro}"}
+      environments: *probe_env
+      tasks:
+        - <<: *probe_task
+          spark_python_task:
+            python_file: ../eval/persona_probe.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}", --persona, "Chief Risk Officer"]
+    ct_probe_collections_head:
+      name: genie-control-tower-probe-collections-head
+      run_as: {service_principal_name: "${var.persona_collections_head}"}
+      environments: *probe_env
+      tasks:
+        - <<: *probe_task
+          spark_python_task:
+            python_file: ../eval/persona_probe.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}", --persona, "Head of Collections"]
+    ct_probe_grievance_officer:
+      name: genie-control-tower-probe-grievance-officer
+      run_as: {service_principal_name: "${var.persona_grievance_officer}"}
+      environments: *probe_env
+      tasks:
+        - <<: *probe_task
+          spark_python_task:
+            python_file: ../eval/persona_probe.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}", --persona, "Grievance officer"]
+    ct_probe_auditor:
+      name: genie-control-tower-probe-auditor
+      run_as: {service_principal_name: "${var.persona_auditor}"}
+      environments: *probe_env
+      tasks:
+        - <<: *probe_task
+          spark_python_task:
+            python_file: ../eval/persona_probe.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}", --persona, "Internal auditor"]

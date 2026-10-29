@@ -13,7 +13,6 @@ simple and correct for an app's low write volume; swap in a pool later if needed
 """
 from __future__ import annotations
 
-import os
 import threading
 import time
 from contextlib import contextmanager
@@ -27,7 +26,7 @@ from databricks_client import client, current_user
 
 import config
 
-INSTANCE_NAME = config.LAKEBASE_INSTANCE
+ENDPOINT = config.LAKEBASE_ENDPOINT
 DB_NAME = config.LAKEBASE_DBNAME
 PG_SCHEMA = config.LAKEBASE_SCHEMA
 
@@ -44,8 +43,7 @@ def _read_write_host() -> str:
     if _host is None:
         with _lock:
             if _host is None:
-                inst = client().database.get_database_instance(name=INSTANCE_NAME)
-                _host = inst.read_write_dns
+                _host = client().postgres.get_endpoint(name=ENDPOINT).status.hosts.host
     return _host
 
 
@@ -57,7 +55,7 @@ def _db_token() -> str:
         with _lock:
             # Re-check inside the lock (another thread may have just refreshed).
             if _token is None or time.time() >= _token_exp:
-                cred = client().database.generate_database_credential(instance_names=[INSTANCE_NAME])
+                cred = client().postgres.generate_database_credential(endpoint=ENDPOINT)
                 _token = cred.token
                 _token_exp = now + _TOKEN_TTL_SECONDS
     return _token
@@ -118,3 +116,15 @@ def execute(sql: str, params: tuple | None = None, returning: bool = False):
         if returning:
             return cur.fetchone()
         return None
+
+
+def execute_as(actor: str, sql: str, params: tuple | None = None, returning: bool = False):
+    """A write made on behalf of a signed-in person, in one transaction that tells the history trigger
+    who made it. The app connects as its own service principal, so without this every case change would
+    be recorded against the app rather than the officer."""
+    with connection() as conn:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute("SELECT set_config('ct.change_source', 'app', true), "
+                        "set_config('ct.changed_by', %s, true)", (actor,))
+            cur.execute(sql, params)
+            return cur.fetchone() if returning else None

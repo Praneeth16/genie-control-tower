@@ -87,21 +87,15 @@ def scope(w=None) -> dict[str, Any]:
 
 
 def _scope(w=None) -> dict[str, Any]:
+    # Entitlements are data: the rows that apply to this caller, directly or through an account group,
+    # are exactly what the row filters and masks evaluate.
     entitlements = dbx.run_sql(
-        f"""SELECT principal, region, granted_by, CAST(granted_at AS STRING) AS granted_at
-            FROM {FQ}.region_entitlement e
+        f"""SELECT principal, persona, region, can_see_pii, can_see_complaint_text, granted_by,
+                   CAST(granted_at AS STRING) AS granted_at
+            FROM {FQ}.entitlements e
             WHERE IS_ACCOUNT_GROUP_MEMBER(e.principal) OR e.principal = CURRENT_USER()
             ORDER BY principal, region""", w=w)["rows"]
-
-    groups = dbx.run_sql(
-        f"""SELECT CURRENT_USER() AS identity,
-                  IS_ACCOUNT_GROUP_MEMBER('{config.GROUP_PREFIX}_ai_coe')          AS ai_coe,
-                  IS_ACCOUNT_GROUP_MEMBER('{config.GROUP_PREFIX}_auditors')        AS auditors,
-                  IS_ACCOUNT_GROUP_MEMBER('{config.GROUP_PREFIX}_pii_readers')     AS pii_readers,
-                  IS_ACCOUNT_GROUP_MEMBER('{config.GROUP_PREFIX}_collections_ops') AS collections_ops,
-                  IS_ACCOUNT_GROUP_MEMBER('{config.GROUP_PREFIX}_grievance_ops')   AS grievance_ops,
-                  IS_ACCOUNT_GROUP_MEMBER('{config.GROUP_PREFIX}_rm_managers')     AS rm_managers""",
-        w=w)["rows"][0]
+    identity = dbx.run_sql("SELECT CURRENT_USER() AS identity", w=w)["rows"][0]["identity"]
 
     counts_sql = " UNION ALL ".join(
         f"SELECT '{t}' AS table_name, COUNT(*) AS visible FROM {FQ}.{t}"
@@ -121,8 +115,10 @@ def _scope(w=None) -> dict[str, Any]:
 
     unrestricted = all(t["visible"] >= t["total"] for t in tables)
     return {
-        "identity": groups.pop("identity", None),
-        "group_memberships": {k: str(v).lower() == "true" for k, v in groups.items()},
+        "identity": identity,
+        "personas": sorted({e["persona"] for e in entitlements if e.get("persona")}),
+        "can_see_pii": any(str(e["can_see_pii"]).lower() == "true" for e in entitlements),
+        "can_see_complaint_text": any(str(e["can_see_complaint_text"]).lower() == "true" for e in entitlements),
         "entitlements": entitlements,
         "tables": tables,
         "unrestricted": unrestricted,

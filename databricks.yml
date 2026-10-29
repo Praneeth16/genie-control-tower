@@ -19,10 +19,25 @@
 bundle:
   name: genie-control-tower
 
+# The persona service principals run the probe jobs as themselves, so they must be able to READ the
+# deployed files. View only: they cannot edit or run anything else.
+permissions:
+  - level: CAN_MANAGE
+    user_name: ${workspace.current_user.userName}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_cro}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_collections_head}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_grievance_officer}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_auditor}
+
 # The journey, one file per stage: the Lakeflow pipeline, the jobs that run it end to end, and the app.
 include:
   - resources/pipeline.yml
   - resources/jobs.yml
+  - resources/personas.yml
 
 # Without this block the bundle uploads node_modules FILE BY FILE — 419MB across app/frontend and
 # scripts — and `bundle deploy` appears to hang with no output for half an hour before it ever reaches
@@ -152,6 +167,15 @@ variables:
   triage_prompt_version:
     description: Prompt version for the letter triage (see pipeline/06_intelligence.sql).
     default: v1
+  lakebase_project:
+    description: Lakebase autoscaling project id (databricks postgres create-project <id>).
+    default: genie-control-tower
+  lakebase_endpoint:
+    description: Read-write compute endpoint of the project's production branch.
+    default: projects/${var.lakebase_project}/branches/production/endpoints/primary
+  brief_prompt_version:
+    description: Prompt version for the case briefs (see ai/case_brief.sql).
+    default: v1
   persona_cro:
     description: Application id of the service principal standing in for the Chief Risk Officer.
   persona_collections_head:
@@ -164,9 +188,12 @@ variables:
 targets:
   # `databricks bundle deploy -t dev` uses the host from your CLI profile, so there is no workspace URL
   # committed here. Pass --profile, or set DATABRICKS_HOST.
+  # Not `mode: development`: that mode pauses every trigger and refuses to unpause them, and the
+  # file-arrival trigger on the landing volume is how a new month of data runs the whole cycle.
   dev:
-    mode: development
     default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
   prod:
     mode: production
