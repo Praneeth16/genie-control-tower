@@ -15,7 +15,8 @@ All data in this repository is synthetic. The bank, its customers, staff, agenci
 
 [YOUR WORDS]
 
-- Microfinance loans in Solapur and commercial vehicle loans in Indore are both getting worse. The collections team works harder in both places and collects less.
+- Microfinance delinquency in Solapur rose from 11.7% in February 2026 to 43.6% in May. Commercial vehicle delinquency in Indore rose to 26.0% in the same month. The rest of the book stayed near 9%. Both have since eased, to 17.8% and 16.1% in August, but they are still about twice the rest of the book.
+- Collections effort followed the stress. In Solapur microfinance, contact attempts rose from 318 in February 2026 to 1,062 in May, more than three times as many, while each attempt collected about the same, INR 575 to 746.
 - There is no single list of which accounts to work first and why. Each manager builds one by hand from several systems.
 - Some of the pressure breaks the RBI rules on recovery agents. Agents call outside 08:00 to 19:00, uncertified agents make contacts, and borrowers with an open complaint keep being contacted. The RBI's August 2022 circular on recovery agents makes the lender responsible for its agencies' conduct.
 - Under the RBI Integrated Ombudsman Scheme, 2021, those borrowers can take an unresolved complaint to the Ombudsman. A complaint about recovery agents is a named ground.
@@ -28,7 +29,7 @@ More detail is in [USE_CASE.md](USE_CASE.md).
 | Outcome for the bank | How it shows up | Evidence |
 |---|---|---|
 | One ranked worklist with the reasons on every row | 589 accounts, each with score components in words | [03](evidence/03_business_results.md), [07](evidence/07_lakebase.md) |
-| Conduct rules applied before an account is worked | 40 accounts held for an open grievance, and 113 moved to a certified agency | [03](evidence/03_business_results.md) |
+| Conduct rules applied before an account is worked | 40 accounts held for an open grievance, and 113 recommended for reassignment to a certified agency | [03](evidence/03_business_results.md) |
 | Every source file checked against what the sender declared | 176 of 177 files reconciled. The short June dialer file is shown as a break. | [02](evidence/02_data_quality.md) |
 | Bad rows caught and kept, never dropped | 1,045 rows caught, each with its reason | [02](evidence/02_data_quality.md) |
 | Customer letters read as they arrive | 713 letters triaged in the pipeline. 248 allege agent misconduct. | [04](evidence/04_ai_output.md), [05](evidence/05_ai_evaluation.md) |
@@ -57,7 +58,7 @@ The headline figures are kept in [evidence/HEADLINES.md](evidence/HEADLINES.md).
 |---|---|---|
 | Lakeflow | Auto Loader reads 18 structured feeds, the scanned letters and the reference documents as they land. The dialer and field app feeds are conformed into one table by two flows. Quality rules quarantine bad rows with a reason. Every file is reconciled against its sender's manifest. Gold tables hold the business rules (DPD bucket, NPA, roll direction, RBI hours, SLA breach, incentive). | [pipeline/](pipeline/), [resources/pipeline.yml](resources/pipeline.yml) |
 | Unity Catalog | Row filters and column masks are declared in each gold table. Entitlements are rows in a table. Tags classify personal data. The conduct controls are UC functions. | [governance/](governance/), [pipeline/04_gold.sql](pipeline/04_gold.sql) |
-| ML and GenAI | `ai_query` triages each letter inside the pipeline. A points score ranks the worklist. `ai_query` writes a brief for the top 200 accounts. MLflow judges from a different model family evaluate both steps. | [pipeline/06_intelligence.sql](pipeline/06_intelligence.sql), [ai/](ai/) |
+| ML and GenAI | `ai_query` triages each letter inside the pipeline. A points score ranks the worklist. `ai_query` writes a brief for the top 200 accounts. The triage is graded against the ground the grievance desk recorded. The briefs are graded against the bank's conduct rules and by MLflow judges from a different model family. | [pipeline/06_intelligence.sql](pipeline/06_intelligence.sql), [ai/](ai/) |
 | Lakebase | The case queue, refreshed from gold every cycle. Officers own status, owner, notes and next date. A trigger writes the history, which refuses changes. The action plane needs a named approver for every action. | [lakebase/](lakebase/), [serve/sync_cases.py](serve/sync_cases.py) |
 | Genie | Three governed agents, deployed from one spec, with business definitions, joins, example SQL and benchmarks. | [genie/](genie/), [resources/genie.yml](resources/genie.yml) |
 | Databricks App | The Overview for the CRO and the Worklist and Case for the Head of Collections, plus Ask, Approvals and Governance. Reads run as the signed-in user. | [app/](app/), [resources/app.yml](resources/app.yml) |
@@ -94,9 +95,9 @@ One iteration story, with numbers from [evidence/05](evidence/05_ai_evaluation.m
 
 - The first brief prompt agreed with the bank's conduct rules on 14% of 200 briefs.
 - Putting the rules in the prompt raised agreement to 100%. But the grounded judge's pass rate fell from 38% to 21%, and plain language fell from 88% to 51%, because the briefs now cited "Rule 3".
-- Giving the model the bank's decision as a fact, and asking it only to explain, raised grounded to 65% with agreement still at 100%. But only 26% of the briefs stayed within 60 words.
+- Giving the model the bank's decision as a fact, and asking it only to explain, raised grounded to 64.5% with agreement still at 100%, on the same July accounts. But only 23.5% of the briefs stayed within 60 words.
 - The final prompt asks for two short sentences and forbids adding any step the rule does not state. On the 200 August briefs it scored 90% grounded, 100% rule agreement and 86% plain language.
-- The letter triage went from 87.1% to 97.0% agreement with the recorded ground when the prompt defined each ground in the bank's terms.
+- The letter triage went from 87.1% to 97.0% agreement with the recorded ground, on the same 690 July letters, when the prompt defined each ground in the bank's terms.
 
 ## Repository layout
 

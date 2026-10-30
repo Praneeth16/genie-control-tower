@@ -9,7 +9,8 @@ executes; `execute` dispatches an approved action to its connector(s), routed by
 """
 from .executor import ROUTING, UnroutableAction, execute
 from .guardrails import (GuardrailsBlinded, actions_enabled, assert_not_blinded,
-                         authorise_approver, approver_roles, evaluate)
+                         authorise_approver, approver_roles, evaluate,
+                         holds_required_role)
 from .model import (
     ActionNotFound,
     ActionPlane,
@@ -29,6 +30,7 @@ __all__ = [
     "actions_enabled",
     "assert_not_blinded",
     "authorise_approver",
+    "holds_required_role",
     "approver_roles",
     "GuardrailsBlinded",
     "execute",

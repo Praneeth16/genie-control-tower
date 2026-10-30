@@ -6,6 +6,7 @@
 
 - `${FQ}.branch_master`: Branch dimension: branch_id, branch_name, city, state, region (North/South/East/West/Central), zone (Metro/Urban/Semi-Urban/Rural). Join only when the question needs city, state, region or zone.
 - `${FQ}.collections_activity`: One row per collections CONTACT ATTEMPT, not per account. Carries contact_hour and within_rbi_hours for RBI conduct auditing: borrower contact is permitted only between 08:00 and 19:00. Key columns: activity_id, activity_date, contact_hour, loan_account_id, product_code, branch_id, agent_id, channel, outcome, promise_to_pay_amount, amount_collected, within_rbi_hours.
+- `${FQ}.collections_case_status`: What the collections team has DONE with each worklist case, published from the Lakebase case queue every cycle: status set by an officer (new, in_progress, promise_to_pay, on_hold, resolved, closed), next_action_date, last_officer_update, open_actions awaiting a decision, officer_changes. Join to collections_priority on loan_account_id. Use for work-in-progress questions.
 - `${FQ}.collections_priority`: The collections WORKLIST: one row per account delinquent at the latest month end, ranked by an explainable points score. priority_score is the sum of dpd_points, roll_points, exposure_points and promise_points; drivers lists them in words. conduct_flags and open_grievance say how the account may be worked; recommended_treatment is the rule-based next step. Use for 'who should we work first', 'how many accounts are on hold', worklist size.
 - `${FQ}.delinquency_monthly`: PRIMARY TABLE for delinquency, DPD, bucket, NPA and roll-rate questions. Grain is one row per loan account per month, 2025-03 to 2026-08. ALWAYS aggregate; never return raw account rows unless a specific account is named. Carries denormalised product_code and branch_id so product/branch filters need no join. Key columns: snapshot_month, loan_account_id, product_code, branch_id, dpd_days, dpd_bucket, outstanding_principal, overdue_amount, is_npa, roll_direction.
 - `${FQ}.loan_accounts`: Loan account master, 6,000 accounts. Use outstanding_principal for exposure/book size; sanctioned_amount is the ORIGINATION amount, never current exposure. Key columns: loan_account_id, customer_id, product_code, branch_id, disbursed_date, sanctioned_amount, outstanding_principal, interest_rate, tenure_months, emi_amount, customer_segment, is_restructured.
@@ -15,6 +16,7 @@
 ## Joins
 
 - `delinquency_monthly`.`loan_account_id` = `loan_accounts`.`loan_account_id`
+- `collections_case_status`.`loan_account_id` = `collections_priority`.`loan_account_id`
 - `collections_activity`.`loan_account_id` = `loan_accounts`.`loan_account_id`
 - `collections_activity`.`agent_id` = `recovery_agents`.`agent_id`
 - `repayment_schedule`.`loan_account_id` = `loan_accounts`.`loan_account_id`
@@ -65,6 +67,8 @@ Loan product (product_code = 'CV'). Vehicle Finance as a segment covers CV, PV a
 collections_priority is the worklist the collections team works today. "On the worklist" means a row in
 collections_priority. "On hold" means open_grievance = TRUE: recovery contact is suspended while the
 borrower's grievance is open. "Conduct flag" means size(conduct_flags) > 0. Rank 1 is worked first.
+collections_case_status is what officers have done with those cases. "Untouched" means officer_changes = 0.
+"Promise to pay recorded" means status = 'promise_to_pay'. Use on_worklist = TRUE for the current list.
 Every table also carries region, so regional questions need no join to branch_master.
 
 ### RBI conduct rules

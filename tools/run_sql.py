@@ -46,17 +46,21 @@ def main() -> int:
     ap.add_argument("--var", action="append", default=[], help="KEY=VALUE placeholder substitution")
     # Serverless job tasks exec the file, so __file__ is undefined there; the bundle passes its root.
     ap.add_argument("--root", default=".", help="repo root the --file paths are relative to")
+    ap.add_argument("--each", default="", help="KEY=v1,v2,...: run every file once per value of KEY")
     a = ap.parse_args()
     values = dict(v.split("=", 1) for v in a.var)
 
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.getOrCreate()
-    for f in a.file:
-        stmts = split_statements(render(open(os.path.join(a.root, f)).read(), values))
-        print(f"{f}: {len(stmts)} statements")
-        for i, stmt in enumerate(stmts, 1):
-            print(f"  [{i}/{len(stmts)}] {stmt.splitlines()[0][:110]}")
-            spark.sql(stmt)
+    key, _, each = a.each.partition("=")
+    for value in (each.split(",") if key else [None]):
+        bound = {**values, key: value} if key else values
+        for f in a.file:
+            stmts = split_statements(render(open(os.path.join(a.root, f)).read(), bound))
+            print(f"{f}{f' ({key}={value})' if key else ''}: {len(stmts)} statements")
+            for i, stmt in enumerate(stmts, 1):
+                print(f"  [{i}/{len(stmts)}] {stmt.splitlines()[0][:110]}")
+                spark.sql(stmt)
     return 0
 
 

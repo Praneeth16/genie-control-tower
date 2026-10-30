@@ -324,7 +324,7 @@ CREATE OR REFRESH MATERIALIZED VIEW complaint_documents (
   complaint_id    STRING    COMMENT 'Complaint the letter belongs to. Join to complaints. NULL for reference documents.',
   document_type   STRING    COMMENT 'customer_letter, compliance_note or agency_agreement.',
   file_name       STRING    COMMENT 'File name as received.',
-  region          STRING    COMMENT 'Region of the complaint\'s branch. NULL for the bank\'s reference documents, which every reader may see.',
+  region          STRING    COMMENT 'Region of the complaint\'s branch; UNASSIGNED for a letter with no matching complaint. NULL only for the bank\'s reference documents, which every reader may see.',
   file_size_bytes BIGINT    COMMENT 'File size in bytes.',
   ingested_at     TIMESTAMP COMMENT 'When the pipeline ingested the file.',
   document_text   STRING    MASK ${catalog}.${schema}.mask_complaint_text COMMENT 'Full text. Customer letters are redacted for callers not cleared to read free text.'
@@ -337,7 +337,9 @@ WITH ROW FILTER ${catalog}.${schema}.document_visible ON (region)
 COMMENT 'Customer complaint letters and the bank\'s reference documents, with full text. Governed like complaints: letters follow the complaint\'s region and their text is masked for callers not cleared to read it.'
 AS
 SELECT l._source_path AS doc_id, regexp_extract(l._file_name, '^(CM[0-9]+)', 1) AS complaint_id,
-       'customer_letter' AS document_type, l._file_name AS file_name, c.region,
+       -- A letter with no matching complaint gets region UNASSIGNED, not NULL: NULL means a reference document
+       -- everyone may read, and an unmatched customer letter must be visible only to all-region readers.
+       'customer_letter' AS document_type, l._file_name AS file_name, coalesce(c.region, 'UNASSIGNED') AS region,
        l._file_size_bytes AS file_size_bytes, l._ingested_at AS ingested_at, l.letter_text AS document_text
 FROM bronze_correspondence l
 LEFT JOIN core_complaints c ON c.complaint_id = regexp_extract(l._file_name, '^(CM[0-9]+)', 1)

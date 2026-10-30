@@ -80,7 +80,10 @@ AS
 WITH j AS (
   SELECT coalesce(m.period, CASE WHEN l.path RLIKE '\\d{4}-\\d{2}' THEN regexp_extract(l.path, '(\\d{4}-\\d{2})', 1) ELSE 'reference' END) AS period,
          coalesce(m.path, l.path) AS path, l.feed, m.declared_rows, l.landed_rows,
-         coalesce(s.loaded_rows, CASE WHEN s.path IS NULL THEN l.landed_rows END, 0) AS loaded_rows,
+         -- Feeds with a silver layer must show their rows in silver or quarantine; a file with none in
+         -- either has lost every row, and must not be assumed loaded.
+         CASE WHEN l.feed IN ('dialer_contacts', 'field_visits', 'dpd_snapshot', 'complaints', 'upi_disputes', 'chargebacks')
+              THEN coalesce(s.loaded_rows, 0) ELSE l.landed_rows END AS loaded_rows,
          coalesce(s.quarantined_rows, 0) AS quarantined_rows,
          m.declared_amount, l.landed_amount, m.amount_field
   FROM manifest_files m

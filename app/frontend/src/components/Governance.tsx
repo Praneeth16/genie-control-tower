@@ -158,13 +158,17 @@ export function Governance() {
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[12px]">
               <span className="font-mono text-foreground">{scope.identity}</span>
-              {Object.entries(scope.group_memberships)
-                .filter(([, v]) => v)
-                .map(([g]) => (
-                  <Badge key={g} variant="outline" className="text-[11px]">
-                    {g}
-                  </Badge>
-                ))}
+              {scope.personas.map((p) => (
+                <Badge key={p} variant="outline" className="text-[11px]">
+                  {p}
+                </Badge>
+              ))}
+              <Badge variant="outline" className="text-[11px]">
+                {scope.can_see_pii ? "identifiers visible" : "identifiers pseudonymised"}
+              </Badge>
+              <Badge variant="outline" className="text-[11px]">
+                {scope.can_see_complaint_text ? "free text visible" : "free text redacted"}
+              </Badge>
               {scope.masked_customer_id_example && (
                 <span className="ml-auto text-muted-foreground">
                   customer ids appear to you as{" "}

@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:27 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 13:58 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 06 — Governance per persona
 
-_Generated 2026-10-29 12:27 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 13:58 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** The same queries return different rows and different values for each persona, enforced by Unity Catalog row filters and column masks declared on the gold tables. Each column is a real identity: a job ran eval/persona_probe.py with run_as set to that persona's service principal.
 
@@ -10,7 +10,7 @@ _Generated 2026-10-29 12:27 UTC by `tools/generate_evidence.py` from the live wo
 | probe | Chief Risk Officer | Head of Collections | Grievance officer | Internal auditor |
 |---|---|---|---|---|
 | identity (current_user) | dc838e27-417a-46c3-8f91-15cf58d6c6ff | 73bf8d86-1fc2-4f1f-b056-45d5b4efe648 | e9b28811-1884-4ba5-8b50-d8fd342622d1 | 144ffd2d-3e63-4f0a-8f18-bdaa03166c2d |
-| probe job run id | 68308829719384 | 368155244731788 | 646453354372560 | 119250912179167 |
+| probe job run id | 510896226790785 | 283750620381637 | 364469743691739 | 682056589389425 |
 | loan_accounts rows visible | 6000 | 3059 | 6000 | 6000 |
 | worklist regions visible | Central, East, North, South, West | Central, West | Central, East, North, South, West | Central, East, North, South, West |
 | customer_id of LN000011 | CU-4c38082a3a | CU-4c38082a3a | CU-4c38082a3a | CU004839 |
@@ -20,6 +20,8 @@ _Generated 2026-10-29 12:27 UTC by `tools/generate_evidence.py` from the live wo
 | letter text | [redacted - free text may contain personal data] | [redacted - free text may contain personal data] | *** SYNTHETIC DOCUMENT — generated for a Databri | *** SYNTHETIC DOCUMENT — generated for a Databri |
 | reference documents visible | 5 | 5 | 5 | 5 |
 | guardrail_visibility() | Row(recovery_agents=60, complaints=9660, delinquency_monthly=108000, collections_activity=63230) | Row(recovery_agents=30, complaints=4599, delinquency_monthly=55062, collections_activity=33448) | Row(recovery_agents=60, complaints=9660, delinquency_monthly=108000, collections_activity=63230) | Row(recovery_agents=60, complaints=9660, delinquency_monthly=108000, collections_activity=63230) |
+| read bronze_complaints (raw) | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: |
+| read quarantine (raw records) | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: | [INSUFFICIENT_PERMISSIONS] Insufficient privileges: |
 
 ## What each persona is entitled to (the entitlements table: access is data)
 
@@ -51,6 +53,7 @@ WHERE table_schema = 'control_tower_banking' ORDER BY 1, 2
 | chargebacks | mask on customer_id | serverless_lakebase_praneeth_catalog.control_tower_banking.mask_customer_id |
 | collections_activity | row filter | serverless_lakebase_praneeth_catalog.control_tower_banking.region_visible |
 | collections_case_brief | row filter | serverless_lakebase_praneeth_catalog.control_tower_banking.region_visible |
+| collections_case_status | row filter | serverless_lakebase_praneeth_catalog.control_tower_banking.region_visible |
 | collections_priority | mask on customer_id | serverless_lakebase_praneeth_catalog.control_tower_banking.mask_customer_id |
 | collections_priority | row filter | serverless_lakebase_praneeth_catalog.control_tower_banking.region_visible |
 | complaint_ai_triage | mask on summary | serverless_lakebase_praneeth_catalog.control_tower_banking.mask_complaint_text |

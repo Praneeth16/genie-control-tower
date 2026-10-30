@@ -66,8 +66,9 @@ answers were wrong, making it useless in CI. A fresh app service principal had n
 
 Listed with what would fix them. None is hidden behind a claim to the contrary.
 
-**Fan-out double counting in generated SQL.** A one-side measure summed across a many-side join inflated a
-denominator 1.30×, answering 43.4% where the truth was 56.45% — confidently, with the workings shown. Found
+**Fan-out double counting in generated SQL.** (Found in September 2026. The question passed in the run of
+2026-10-29, but Genie is not deterministic, so this stays open.) A one-side measure summed across a
+many-side join inflated a denominator 1.30×, answering 43.4% where the truth was 56.45% — confidently, with the workings shown. Found
 by the held-out suite and **deliberately left unfixed**, because tuning against a held-out failure destroys
 the only honest measurement available. Fix by instructing pre-aggregation in a CTE, then measure on a *new*
 held-out set.

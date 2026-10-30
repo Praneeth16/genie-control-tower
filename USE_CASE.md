@@ -23,7 +23,9 @@ The domain owner is the Head of Collections and Recovery. The Head of Collection
 
 ## The problem
 
-Two parts of the loan book are under stress. The bank's microfinance loans in Solapur and its commercial vehicle loans in Indore are both getting worse. The collections team works harder in both places, but collects less.
+Two parts of the loan book came under stress this year. Microfinance delinquency in Solapur rose from 11.7% in February 2026 to 43.6% in May. Commercial vehicle delinquency in Indore rose to 26.0%. The rest of the book stayed near 9%. Both have eased since, to 17.8% and 16.1% in August, but both are still about twice the rest of the book.
+
+Collections effort followed the stress. In Solapur microfinance, contact attempts rose from 318 in February 2026 to 1,062 in May, more than three times as many, while each attempt collected about the same, INR 575 to 746.
 
 The collections team does not have one list that says which accounts to work first and why. Each manager builds a list from several systems. The dialer vendor and the field app report the same contact attempts in different formats. So nobody can say with confidence how many contacts broke the rules.
 
@@ -46,7 +48,7 @@ The data also arrives late, or short. In June the dialer vendor's file arrived 3
 ## What the bank gets
 
 - One worklist, refreshed every time new data lands. It ranks the delinquent accounts with a score whose reasons are stored on every row.
-- The bank's conduct rules are applied before an account is worked. An account with an open grievance is held. An account contacted out of hours or by an uncertified agent is moved to a certified agency.
+- The bank's conduct rules are applied before an account is worked. An account with an open grievance is held. An account contacted out of hours or by an uncertified agent is recommended for reassignment to a certified agency.
 - Customer letters are read by an AI step as they arrive. Alleged agent misconduct is flagged for review.
 - A completeness check on every source file, so a short or missing file is visible on the day it lands.
 - Plain-language answers from Genie agents, governed per person, for both leaders.

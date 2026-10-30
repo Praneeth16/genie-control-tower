@@ -27,13 +27,21 @@ WHEN MATCHED THEN UPDATE SET persona = s.persona, can_see_pii = s.can_see_pii,
 WHEN NOT MATCHED THEN INSERT (principal, persona, region, can_see_pii, can_see_complaint_text, granted_by, granted_at)
   VALUES (s.principal, s.persona, s.region, s.can_see_pii, s.can_see_complaint_text, 'setup', current_timestamp());
 
--- Read-only access. SELECT and EXECUTE on the schema; the row filters and masks decide what each one sees.
+-- Read-only access. Catalog and schema USE, and EXECUTE on the policy and control functions. SELECT is NOT
+-- granted on the schema: the schema also holds bronze, silver and quarantine tables, which carry raw
+-- customer identifiers and letter text with no row filter or mask. Personas get SELECT only on the
+-- governed tables, table by table, in governance/grants.sql once the pipeline has created them.
 -- Nobody here is granted MODIFY: writes happen through the app's action plane, never through SQL.
 GRANT USE CATALOG ON CATALOG ${CATALOG} TO `${CRO}`;
 GRANT USE CATALOG ON CATALOG ${CATALOG} TO `${COLLECTIONS_HEAD}`;
 GRANT USE CATALOG ON CATALOG ${CATALOG} TO `${GRIEVANCE_OFFICER}`;
 GRANT USE CATALOG ON CATALOG ${CATALOG} TO `${AUDITOR}`;
-GRANT USE SCHEMA, SELECT, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${CRO}`;
-GRANT USE SCHEMA, SELECT, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${COLLECTIONS_HEAD}`;
-GRANT USE SCHEMA, SELECT, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${GRIEVANCE_OFFICER}`;
-GRANT USE SCHEMA, SELECT, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${AUDITOR}`;
+GRANT USE SCHEMA, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${CRO}`;
+GRANT USE SCHEMA, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${COLLECTIONS_HEAD}`;
+GRANT USE SCHEMA, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${GRIEVANCE_OFFICER}`;
+GRANT USE SCHEMA, EXECUTE ON SCHEMA ${CATALOG}.${SCHEMA} TO `${AUDITOR}`;
+-- An earlier version granted SELECT on the whole schema; remove it.
+REVOKE SELECT ON SCHEMA ${CATALOG}.${SCHEMA} FROM `${CRO}`;
+REVOKE SELECT ON SCHEMA ${CATALOG}.${SCHEMA} FROM `${COLLECTIONS_HEAD}`;
+REVOKE SELECT ON SCHEMA ${CATALOG}.${SCHEMA} FROM `${GRIEVANCE_OFFICER}`;
+REVOKE SELECT ON SCHEMA ${CATALOG}.${SCHEMA} FROM `${AUDITOR}`;

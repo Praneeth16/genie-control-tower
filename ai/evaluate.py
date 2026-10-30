@@ -67,7 +67,14 @@ def numbers(text: str) -> list[float]:
 def ungrounded_numbers(explanation: str, facts: str) -> list[str]:
     """Numbers in the explanation that match no value in the facts, allowing for rounding and for the
     amount being written in thousands, lakh, millions or crore (INR 33,38,970 written as 33.39 L)."""
-    have = numbers(facts)
+    # Values only: digits in a key such as contacts_90d would otherwise vouch for an invented "90".
+    def values(v):
+        if isinstance(v, dict):
+            return " ".join(values(x) for x in v.values())
+        if isinstance(v, list):
+            return " ".join(values(x) for x in v)
+        return str(v)
+    have = numbers(values(json.loads(facts)))
     out = []
     for x in numbers(explanation):
         if not any(abs(v - x * scale) <= 0.01 * max(abs(v), 1.0)

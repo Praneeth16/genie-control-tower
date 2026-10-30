@@ -26,6 +26,9 @@ PROBES = {
     "reference_docs_visible": """SELECT count(*) AS reference_documents FROM {fq}.complaint_documents
                                  WHERE document_type <> 'customer_letter'""",
     "guardrail_visibility": "SELECT {fq}.guardrail_visibility() AS visible",
+    # Raw layers carry identifiers and letter text with no filter or mask; no persona may read them.
+    "bronze_complaints_access": "SELECT count(*) AS rows FROM {fq}.bronze_complaints",
+    "quarantine_access": "SELECT count(*) AS rows FROM {fq}.quarantine_collections_activity",
 }
 
 
@@ -40,8 +43,12 @@ def main() -> None:
     fq = f"{a.catalog}.{a.schema}"
     out = {"persona": a.persona, "probes": {}}
     for name, q in PROBES.items():
-        rows = spark.sql(q.format(fq=fq)).collect()
-        out["probes"][name] = [{k: str(v) for k, v in r.asDict().items()} for r in rows]
+        try:
+            rows = spark.sql(q.format(fq=fq)).collect()
+            out["probes"][name] = [{k: str(v) for k, v in r.asDict().items()} for r in rows]
+        except Exception as e:
+            # A refusal is a result: record it rather than fail the probe.
+            out["probes"][name] = [{"refused": str(e).splitlines()[0][:160]}]
     print("PROBE_RESULT " + json.dumps(out))
 
 

@@ -200,7 +200,15 @@ def authorise_approver(action: dict[str, Any], approver: str) -> tuple[bool, str
     """
     if action.get("requested_by") and action["requested_by"] == approver:
         return False, "separation of duties: you cannot approve an action you requested"
+    return holds_required_role(action, approver)
 
+
+def holds_required_role(action: dict[str, Any], principal: str) -> tuple[bool, str]:
+    """Does `principal` hold the role this action type's policy names? Separation of duties is NOT part of
+    this check, so executing and rejecting can require the role on its own. They used to call
+    authorise_approver and ignore its separation-of-duties refusal, which returned BEFORE the role check:
+    the proposer could therefore execute or reject without holding the role at all."""
+    approver = principal
     policy = _policy(action.get("action_type"))
     if policy is None:
         return False, f"no policy for action_type '{action.get('action_type')}'"

@@ -89,6 +89,14 @@ resources:
             python_file: ../tools/run_sql.py
             parameters: [--root, "${workspace.file_path}", --file, governance/action_functions.sql, --file, governance/tags.sql,
                          --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}"]
+        - task_key: grant_personas
+          depends_on: [{task_key: sync_cases}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/grants.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}",
+                         --each, "PRINCIPAL=${var.persona_cro},${var.persona_collections_head},${var.persona_grievance_officer},${var.persona_auditor}"]
         - task_key: case_briefs
           depends_on: [{task_key: govern}]
           environment_key: default

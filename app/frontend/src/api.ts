@@ -140,7 +140,10 @@ export interface ScopeTable {
 
 export interface Scope {
   identity: string | null;
-  group_memberships: Record<string, boolean>;
+  /** The business roles this caller's entitlement rows grant. Entitlements are data, not group checks. */
+  personas: string[];
+  can_see_pii: boolean;
+  can_see_complaint_text: boolean;
   entitlements: Record<string, string>[];
   tables: ScopeTable[];
   unrestricted: boolean;

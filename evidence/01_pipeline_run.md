@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 13:53 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 01 — Lakeflow pipeline run
 
-_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 13:53 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** The serverless Spark Declarative Pipeline ran from raw files to governed gold, every layer holds rows, and each data-quality expectation reports how many rows passed and failed. Expectation totals are summed across every update since the tables were created, read from the pipeline's own event log.
 
@@ -9,13 +9,13 @@ Pipeline `9fa6adcc-8175-487f-ad73-3f260e63a359`. Most recent updates:
 
 | update_id | state | cause | started (UTC) | refresh |
 |---|---|---|---|---|
+| 08a95391-0462-4432-8a46-310621add421 | COMPLETED | JOB_TASK | 2026-10-29 13:27 |  |
 | 7dd133ab-2ff7-47fe-a3f5-46b56a9a1095 | COMPLETED | API_CALL | 2026-10-29 12:22 |  |
 | 84611eaa-8954-404b-a1ff-87e248ddf28a | COMPLETED | JOB_TASK | 2026-10-29 10:28 |  |
 | 0fa48c1b-e9d9-4ab1-874f-ccd92711f507 | COMPLETED | JOB_TASK | 2026-10-29 09:54 |  |
 | 5dcfd5a8-2987-45f6-b178-a17b81be485a | COMPLETED | API_CALL | 2026-10-29 09:50 | core_letter_triage |
-| a90c36b1-6f88-4398-b78b-d7e1e2354f82 | COMPLETED | API_CALL | 2026-10-29 09:07 |  |
 
-Latest update: `7dd133ab-2ff7-47fe-a3f5-46b56a9a1095`.
+Latest update: `08a95391-0462-4432-8a46-310621add421`.
 
 ## Rows per table, by layer
 
@@ -72,7 +72,7 @@ GROUP BY ALL ORDER BY 1, 2
 
 | dataset | expectation | passed | failed |
 |---|---|---|---|
-| serverless_lakebase_praneeth_catalog.control_tower_banking.recon_completeness | file_reconciled | 510 | 3 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.recon_completeness | file_reconciled | 686 | 4 |
 | serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | amount_positive | 4220 | 0 |
 | serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | dates_readable | 4220 | 0 |
 | serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | raised_after_transaction | 4200 | 20 |

@@ -4,7 +4,7 @@
 
 ## Set the stage (2 minutes)
 
-- Say what you heard. "Collections effort is up in Solapur and Indore and recovery is down. Some of that pressure is breaking the RBI contact rules, and your teams find out when the complaint arrives."
+- Say what you heard. "Solapur microfinance and Indore commercial vehicles spiked this year and are still about twice the rest of the book. Some of the collection pressure is breaking the RBI contact rules, and your teams find out when the complaint arrives."
 - Say your goal. "In the next fifteen minutes I want to show you one worklist that tells your team who to work first, why, and who they must not contact."
 - Give the agenda: the overview, the worklist, one case, one question to Genie, then the pilot.
 - Ask what they want covered, then wait. Use the answer in the demo.
@@ -65,7 +65,7 @@ Ask directly. "Can we agree a six-week pilot in West and Central, starting on a 
   - A re-sent file is safe, because each file is read once and re-sent records are de-duplicated.
 
 - Security, integration and operations?
-  - Unity Catalog row filters and column masks are on every published table. Entitlements are rows a steward can change.
+  - Every published table that holds customer data carries column masks, and every table with a region carries a row filter. The raw and quarantine layers are not granted to anyone. Entitlements are rows a steward can change.
   - The case queue lives in Lakebase. The app shows each person only the regions Unity Catalog grants them.
   - Your source systems do not change. They drop files into a volume as they do today.
   - It is one bundle and one job, and the job starts when a drop's manifest lands.

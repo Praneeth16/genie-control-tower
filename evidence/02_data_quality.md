@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 13:53 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 02 — Data quality and completeness
 
-_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 13:53 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** Every planted defect in the answer key was caught, in the expected place, with the expected count; the governed gold tables hold exactly the rows the clean book should; and every source file is reconciled against its sender's manifest, with the one planted truncated transfer shown as a BREAK.
 

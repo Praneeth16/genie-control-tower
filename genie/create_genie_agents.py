@@ -127,6 +127,12 @@ COLLECTIONS = {
             "open_grievance say how the account may be worked; recommended_treatment is the rule-based "
             "next step. Use for 'who should we work first', 'how many accounts are on hold', worklist size."
         ),
+        "collections_case_status": (
+            "What the collections team has DONE with each worklist case, published from the Lakebase case queue "
+            "every cycle: status set by an officer (new, in_progress, promise_to_pay, on_hold, resolved, closed), "
+            "next_action_date, last_officer_update, open_actions awaiting a decision, officer_changes. Join to "
+            "collections_priority on loan_account_id. Use for work-in-progress questions."
+        ),
     },
     "instructions": """### Space metadata
 You answer questions about loan collections and recovery for an Indian retail and commercial bank.
@@ -169,6 +175,8 @@ Loan product (product_code = 'CV'). Vehicle Finance as a segment covers CV, PV a
 collections_priority is the worklist the collections team works today. "On the worklist" means a row in
 collections_priority. "On hold" means open_grievance = TRUE: recovery contact is suspended while the
 borrower's grievance is open. "Conduct flag" means size(conduct_flags) > 0. Rank 1 is worked first.
+collections_case_status is what officers have done with those cases. "Untouched" means officer_changes = 0.
+"Promise to pay recorded" means status = 'promise_to_pay'. Use on_worklist = TRUE for the current list.
 Every table also carries region, so regional questions need no join to branch_master.
 
 ### RBI conduct rules
@@ -203,6 +211,7 @@ If a question spans customer complaints, RBI ombudsman cases, or relationship-ma
 say it belongs to a different domain agent and do not guess from these tables.""",
     "joins": [
         ("delinquency_monthly", "loan_accounts", "`delinquency_monthly`.`loan_account_id` = `loan_accounts`.`loan_account_id`", MANY_TO_ONE),
+        ("collections_case_status", "collections_priority", "`collections_case_status`.`loan_account_id` = `collections_priority`.`loan_account_id`", ONE_TO_ONE),
         ("collections_activity", "loan_accounts", "`collections_activity`.`loan_account_id` = `loan_accounts`.`loan_account_id`", MANY_TO_ONE),
         ("collections_activity", "recovery_agents", "`collections_activity`.`agent_id` = `recovery_agents`.`agent_id`", MANY_TO_ONE),
         ("repayment_schedule", "loan_accounts", "`repayment_schedule`.`loan_account_id` = `loan_accounts`.`loan_account_id`", ONE_TO_ONE),
@@ -345,6 +354,8 @@ WHERE a.within_rbi_hours = FALSE GROUP BY r.agency_name ORDER BY out_of_hours_co
         ("How many accounts are on the collections worklist in each region, and how much do they owe?",
          f"""SELECT region, COUNT(*) AS accounts, ROUND(SUM(outstanding_principal), 0) AS outstanding_inr
 FROM {fq('collections_priority')} GROUP BY region ORDER BY outstanding_inr DESC"""),
+        ("How many accounts on the current worklist has no officer touched yet?",
+         f"SELECT COUNT(*) AS untouched FROM {fq('collections_case_status')} WHERE on_worklist AND officer_changes = 0"),
         ("How many worklist accounts are on hold because of an open grievance?",
          f"SELECT COUNT(*) AS on_hold FROM {fq('collections_priority')} WHERE open_grievance"),
         ("What share of the collections worklist carries a conduct flag?",

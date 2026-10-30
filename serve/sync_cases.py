@@ -44,9 +44,10 @@ def main() -> None:
                p.recommended_treatment, b.explanation AS ai_explanation,
                b.recommended_action AS ai_recommended_action, b.prompt_version AS ai_prompt_version
         FROM {fq}.collections_priority p
+        -- Only a brief written from THIS month-end's facts; an older brief would explain last month.
         LEFT JOIN (SELECT * FROM {fq}.collections_case_brief WHERE error IS NULL
-                   QUALIFY row_number() OVER (PARTITION BY loan_account_id ORDER BY briefed_at DESC) = 1) b
-          USING (loan_account_id)""").collect()
+                   QUALIFY row_number() OVER (PARTITION BY loan_account_id, snapshot_month ORDER BY briefed_at DESC) = 1) b
+          ON b.loan_account_id = p.loan_account_id AND b.snapshot_month = p.snapshot_month""").collect()
 
     w = WorkspaceClient()
     host = w.postgres.get_endpoint(name=a.endpoint).status.hosts.host
@@ -79,8 +80,47 @@ def main() -> None:
             cur.execute("SELECT count(*), count(*) FILTER (WHERE on_worklist), "
                         "count(*) FILTER (WHERE status <> 'new') FROM collections_cases")
             total, active, worked = cur.fetchone()
+            cur.execute("""SELECT c.case_id, c.loan_account_id, c.region, c.status, c.next_action_date, c.updated_at,
+                                  c.on_worklist, c.refreshed_at,
+                                  (SELECT count(*) FROM actions a WHERE a.case_id = c.case_id
+                                     AND a.status IN ('proposed', 'approved', 'escalated')) AS open_actions,
+                                  (SELECT count(*) FROM case_history h WHERE h.case_id = c.case_id
+                                     AND h.change_source = 'app') AS officer_changes
+                           FROM collections_cases c""")
+            status_rows = cur.fetchall()
+    publish_case_status(spark, fq, status_rows)
     print(json.dumps({"gold_rows": len(rows), "cases_before": before, "cases_after": total,
                       "on_worklist": active, "left_worklist": left, "cases_worked_by_people": worked}))
+
+
+def publish_case_status(spark, fq: str, rows: list[tuple]) -> None:
+    """Publish what officers have done with each case back to Unity Catalog.
+
+    Lakebase is where people work the cases; Unity Catalog is where the bank asks questions. Without this
+    the Genie agents and the CRO's overview could see the worklist but not the work: how many accounts
+    have a promise to pay, how many are on hold, how many have an action waiting for approval. Only the
+    status columns are published, not the officers' notes or names. The table carries the same region row
+    filter as the worklist, and INSERT OVERWRITE keeps the filter in place.
+    """
+    spark.sql(f"""CREATE TABLE IF NOT EXISTS {fq}.collections_case_status (
+        case_id BIGINT COMMENT 'Case id in the Lakebase case queue.',
+        loan_account_id STRING COMMENT 'Loan account. Join to collections_priority or loan_accounts.',
+        region STRING COMMENT 'Region of the account.',
+        status STRING COMMENT 'Status an officer set: new, in_progress, promise_to_pay, on_hold, resolved or closed.',
+        next_action_date DATE COMMENT 'Next action date an officer set, if any.',
+        last_officer_update TIMESTAMP COMMENT 'When an officer last changed the case. NULL if no officer has touched it.',
+        on_worklist BOOLEAN COMMENT 'TRUE while the account is still delinquent and on the worklist.',
+        refreshed_at TIMESTAMP COMMENT 'When the pipeline last refreshed the case.',
+        open_actions BIGINT COMMENT 'Actions on this case proposed, approved or escalated and not yet closed.',
+        officer_changes BIGINT COMMENT 'Number of changes officers have made to this case in the app.')
+      WITH ROW FILTER {fq}.region_visible ON (region)
+      COMMENT 'What the collections team has done with each worklist case, published from the Lakebase case queue every cycle. Use it for questions about work in progress: promises to pay, holds, cases nobody has touched, actions awaiting approval.'""")
+    df = spark.createDataFrame(rows, schema="case_id BIGINT, loan_account_id STRING, region STRING, status STRING, "
+                               "next_action_date DATE, last_officer_update TIMESTAMP, on_worklist BOOLEAN, "
+                               "refreshed_at TIMESTAMP, open_actions BIGINT, officer_changes BIGINT")
+    df.createOrReplaceTempView("case_status_snapshot")
+    spark.sql(f"INSERT OVERWRITE {fq}.collections_case_status SELECT * FROM case_status_snapshot")
+    print(json.dumps({"published_case_status_rows": len(rows)}))
 
 
 if __name__ == "__main__":

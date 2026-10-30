@@ -197,7 +197,9 @@ export function Worklist() {
       </section>
       <aside>
         <Card><CardContent className="p-4">
-          {selected ? <CasePanel id={selected} onChanged={load} /> :
+          {/* Keyed by case id: without it the panel kept the previous case's form while the save target changed,
+              so a slow response could write one borrower's notes onto another case. */}
+          {selected ? <CasePanel key={selected} id={selected} onChanged={load} /> :
             <p className="text-sm text-muted-foreground">Select an account to see why it is on the list and to work it.</p>}
         </CardContent></Card>
       </aside>

@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 13:53 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 04 — AI output, verbatim
 
-_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 13:53 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** The two AI steps produce structured output that the next stages consume: the letter triage feeds the worklist's conduct flags and the grievance agent; the briefs feed the Lakebase case queue. Samples are verbatim, with exactly what the model was given.
 

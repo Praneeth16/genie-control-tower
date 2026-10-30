@@ -227,6 +227,13 @@ FROM {f}.delinquency_monthly GROUP BY 1 ORDER BY 1 DESC LIMIT 6""")
   round(100 * avg(CASE WHEN NOT (b.city IN ('Solapur', 'Indore')) THEN CASE WHEN d.dpd_days > 0 THEN 1 ELSE 0 END END), 1) AS rest_of_book_pct
 FROM {f}.delinquency_monthly d JOIN {f}.branch_master b USING (branch_id)
 WHERE d.snapshot_month >= DATE'2026-02-01' GROUP BY 1 ORDER BY 1""")
+          + "\n## Collections effort against what was collected, Solapur microfinance, by month\n\n"
+          + q(ctx, f"""SELECT date_trunc('MONTH', a.activity_date) AS month, count(*) AS contact_attempts,
+       count(DISTINCT a.loan_account_id) AS accounts_contacted, round(sum(a.amount_collected)) AS collected_inr,
+       round(sum(a.amount_collected) / count(*)) AS collected_per_attempt_inr
+FROM {f}.collections_activity a JOIN {f}.branch_master b USING (branch_id)
+WHERE a.product_code = 'MFI' AND b.city = 'Solapur' AND a.activity_date >= DATE'2026-01-01'
+GROUP BY 1 ORDER BY 1""")
           + "\n## The collections worklist and how the bank's conduct rules say each account may be worked\n\n"
           + q(ctx, f"""SELECT recommended_treatment, count(*) AS accounts, round(sum(outstanding_principal)) AS outstanding_inr
 FROM {f}.collections_priority GROUP BY 1 ORDER BY accounts DESC""")
@@ -321,6 +328,8 @@ def ev06(ctx: Ctx) -> None:
         ["letter text"] + pick("letter_text_sample", lambda v: v[0]["text_start"][:48] if v else "no rows"),
         ["reference documents visible"] + pick("reference_docs_visible", lambda v: v[0]["reference_documents"]),
         ["guardrail_visibility()"] + pick("guardrail_visibility", lambda v: v[0]["visible"]),
+        ["read bronze_complaints (raw)"] + pick("bronze_complaints_access", lambda v: v[0].get("refused", f"READ {v[0].get('rows')} rows")[:90]),
+        ["read quarantine (raw records)"] + pick("quarantine_access", lambda v: v[0].get("refused", f"READ {v[0].get('rows')} rows")[:90]),
     ]
     write("06_governance.md", "06 — Governance per persona",
           "The same queries return different rows and different values for each persona, enforced by Unity Catalog "
@@ -385,19 +394,29 @@ def ev08(ctx: Ctx) -> None:
                RM_SPACE_ID=ctx.spaces["rm"])
     parts = []
     for mode, results_file in ((["genie"], "genie-latest.json"), (["genie", "--heldout"], "heldout-genie-latest.json")):
+        path = os.path.join(ROOT, "eval", "results", results_file)
         if not REUSE_GENIE:
+            before = os.path.getmtime(path) if os.path.exists(path) else 0
             subprocess.run([sys.executable, "eval/run_eval.py", *mode], cwd=ROOT, env=env, check=False)
-        res = json.load(open(os.path.join(ROOT, "eval", "results", results_file)))
+            # run_eval exits non-zero when any answer is wrong, so the exit code cannot tell a failed run
+            # from a scored one. A results file that was not rewritten can: never report a stale file.
+            if not os.path.exists(path) or os.path.getmtime(path) <= before:
+                raise RuntimeError(f"run_eval {' '.join(mode)} did not write {results_file}")
+        res = json.load(open(path))
+        ran_at = dt.datetime.fromtimestamp(os.path.getmtime(path), dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         label = "held-out questions (not used to tune the spaces)" if "--heldout" in mode else "benchmark questions"
         rows = [[c["id"], c["domain"], c["question"], c["outcome"], c.get("matched_in", ""), (c.get("detail") or "")[:140]]
                 for c in res["cases"]]
         parts.append(f"## {label.capitalize()}: {res['passed']} of {res['graded']} graded passed "
                      f"({res['accuracy_pct_of_graded']}%), {res['attempted']} attempted\n\n"
+                     f"Questions asked at {ran_at} (`eval/results/{results_file}`).\n\n"
                      + table(["id", "agent", "question", "outcome", "matched in", "detail"], rows, 80))
     write("08_genie.md", "08 — Genie agents against ground truth",
           "Every benchmark question was asked through the Genie Conversation API and graded against ground-truth "
-          "SQL executed in the same minute, checking both the result grid and the prose Genie wrote. The held-out "
-          "set was never used to tune the spaces, so it is the honest number.",
+          "SQL executed in the same minute. Every answer's result grid is checked; for a single-number answer the "
+          "prose Genie wrote must also state the number, while list and ranking answers pass on the grid alone. "
+          "The held-out set was never used to tune the spaces, so it is the honest number. Genie is not "
+          "deterministic, so these are the results of one run at the time shown.",
           f"Spaces: {', '.join(f'{k} `{v}`' for k, v in ctx.spaces.items())}.\n\n" + "\n\n".join(parts))
 
 
@@ -486,17 +505,17 @@ def evhl(ctx: Ctx) -> None:
         ["Accounts on the collections worklist", f"{int(acc):,} (month end {month})", "03"],
         ["Outstanding on the worklist", f"INR {crore:,.1f} crore", "03"],
         ["Accounts held because the borrower's grievance is open", f"{int(held):,}", "03"],
-        ["Accounts with a conduct flag", f"{int(flags):,}, of which {int(reassign):,} are moved to a certified agency", "03"],
+        ["Accounts with a conduct flag", f"{int(flags):,}, of which {int(reassign):,} are recommended for reassignment to a certified agency", "03"],
         ["Contacts outside 08:00 to 19:00 IST", f"{int(ooh):,} of {int(contacts):,} ({100 * int(ooh) / int(contacts):.1f}%)", "03"],
         ["Gross NPA, latest month", f"{gnpa}%", "03"],
         ["Roll-forward rate, latest month", f"{rf}%", "03"],
         ["Source files reconciled to their senders' manifests", f"{int(ok)} of {int(files)}", "02"],
         ["Rows caught by quality rules, each kept with its reason", f"{int(caught):,}", "02"],
         ["Letters triaged by AI in the pipeline", f"{int(letters):,}, of which {int(alleged):,} allege agent misconduct", "04"],
-        ["Letter triage agreement with the recorded ground", f"{metric('letter_triage', 'v1', 'ground_accuracy')}% (v1) to {metric('letter_triage', 'v2', 'ground_accuracy')}% (v2)", "05"],
+        ["Letter triage agreement with the recorded ground", f"{metric('letter_triage', 'v1', 'ground_accuracy')}% (v1) to {metric('letter_triage', 'v2', 'ground_accuracy')}% (v2), both on the same 690 July letters", "05"],
         ["Conduct letters found by the triage", f"recall {metric('letter_triage', 'v2', 'conduct_recall')}%, precision {metric('letter_triage', 'v2', 'conduct_precision')}%", "05"],
-        ["Briefs that follow the bank's conduct rules", f"{metric('case_brief', 'v1', 'rule_agreement_pass_rate')}% (v1) to {metric('case_brief', 'v4', 'rule_agreement_pass_rate')}% (v4)", "05"],
-        ["Briefs the judge finds grounded in the facts", f"{metric('case_brief', 'v1', 'grounded_pass_rate')}% (v1) to {metric('case_brief', 'v4', 'grounded_pass_rate')}% (v4)", "05"],
+        ["Briefs that follow the bank's conduct rules", f"{metric('case_brief', 'v1', 'rule_agreement_pass_rate')}% (v1, July) to {metric('case_brief', 'v4', 'rule_agreement_pass_rate')}% (v4, August)", "05"],
+        ["Briefs the judge finds grounded in the facts", f"{metric('case_brief', 'v1', 'grounded_pass_rate')}% (v1, July) to {metric('case_brief', 'v4', 'grounded_pass_rate')}% (v4, August)", "05"],
     ]
     rows += [[f"Genie, {label.lower()}", f"{p} of {n} ({pct}%)", "08"] for label, p, n, pct in g]
     write("HEADLINES.md", "Headline figures",

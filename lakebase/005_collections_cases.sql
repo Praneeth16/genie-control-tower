@@ -76,8 +76,13 @@ BEGIN
                 concat('rank ', NEW.priority_rank, ', ', NEW.recommended_treatment));
         RETURN NEW;
     END IF;
+    -- Every business column, machine-owned and human-owned. Only refreshed_at and the updated_* stamps are
+    -- left out: they change on every write and say nothing the changed_at and changed_by columns do not.
     FOREACH f IN ARRAY ARRAY['status', 'owner', 'notes', 'next_action_date',
-                             'priority_rank', 'dpd_bucket', 'recommended_treatment', 'ai_recommended_action', 'on_worklist']
+                             'region', 'branch_id', 'product_code', 'snapshot_month', 'dpd_days', 'dpd_bucket',
+                             'outstanding_principal', 'priority_score', 'priority_rank', 'drivers', 'conduct_flags',
+                             'recommended_treatment', 'ai_explanation', 'ai_recommended_action', 'ai_prompt_version',
+                             'on_worklist']
     LOOP
         EXECUTE format('SELECT ($1).%I::text, ($2).%I::text', f, f) INTO o, n USING OLD, NEW;
         IF o IS DISTINCT FROM n THEN

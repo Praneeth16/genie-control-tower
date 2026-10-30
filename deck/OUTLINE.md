@@ -1,16 +1,16 @@
 # Deck outline
 
-[YOUR WORDS] Approve or change this outline before the slides are built. Each title is the takeaway. Every number comes from `evidence/HEADLINES.md`. The slides use the Databricks corporate template ("TEMPLATE Databricks Corporate Slide 2025") and are exported to `deck/genie-control-tower.pdf`.
+[YOUR WORDS] The slides are built from this outline in `deck/genie-control-tower.html` and exported to `deck/genie-control-tower.pdf`. Change the outline and the slides together. Each title is the takeaway. Every number comes from `evidence/HEADLINES.md`. The slides use the Databricks editorial deck template and brand assets from the genie-design repository (databricks-field-eng/genie-design).
 
 1. Title. Work the right 589 accounts first, and never contact a borrower you must not contact.
 
 2. The answer up front.
    - 589 delinquent accounts, INR 44.1 crore, ranked with reasons.
    - 40 accounts held because the borrower's grievance is open.
-   - 2,499 contacts outside RBI hours found, and a rule that moves those accounts to a certified agency.
+   - 2,499 contacts outside RBI hours found, and a rule that recommends those accounts for reassignment to a certified agency.
    - The ask: a 6-week pilot in the West and Central regions.
 
-3. The problem. Collections effort is up and recovery is down in two stressed books, and 4.0% of contacts break the RBI contact window. Why now: the RBI's 2022 recovery agent circular and the Integrated Ombudsman Scheme.
+3. The problem. Two books spiked this year and are still about twice the rest of the book, and 4.0% of contacts break the RBI contact window. Why now: the RBI's 2022 recovery agent circular and the Integrated Ombudsman Scheme.
 
 4. Today against tomorrow.
    - Today: hand-built lists from several systems, short files that nobody sees, and conduct breaches found after the complaint.

@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-29 13:53 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 03 — Business results
 
-_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-29 13:53 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** The answers the Chief Risk Officer and the Head of Collections act on, computed from the governed gold tables after the final run. These are the numbers the README and the deck quote.
 
@@ -44,6 +44,28 @@ WHERE d.snapshot_month >= DATE'2026-02-01' GROUP BY 1 ORDER BY 1
 | 2026-06-01 | 34.6 | 23.8 | 9.3 |
 | 2026-07-01 | 25.0 | 15.8 | 9.4 |
 | 2026-08-01 | 17.8 | 16.1 | 8.4 |
+
+## Collections effort against what was collected, Solapur microfinance, by month
+
+```sql
+SELECT date_trunc('MONTH', a.activity_date) AS month, count(*) AS contact_attempts,
+       count(DISTINCT a.loan_account_id) AS accounts_contacted, round(sum(a.amount_collected)) AS collected_inr,
+       round(sum(a.amount_collected) / count(*)) AS collected_per_attempt_inr
+FROM serverless_lakebase_praneeth_catalog.control_tower_banking.collections_activity a JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b USING (branch_id)
+WHERE a.product_code = 'MFI' AND b.city = 'Solapur' AND a.activity_date >= DATE'2026-01-01'
+GROUP BY 1 ORDER BY 1
+```
+
+| month | contact_attempts | accounts_contacted | collected_inr | collected_per_attempt_inr |
+|---|---|---|---|---|
+| 2026-01-01T00:00:00.000Z | 338 | 126 | 249659.0 | 739.0 |
+| 2026-02-01T00:00:00.000Z | 318 | 126 | 182799.0 | 575.0 |
+| 2026-03-01T00:00:00.000Z | 344 | 126 | 240572.0 | 699.0 |
+| 2026-04-01T00:00:00.000Z | 644 | 126 | 480486.0 | 746.0 |
+| 2026-05-01T00:00:00.000Z | 1062 | 126 | 739936.0 | 697.0 |
+| 2026-06-01T00:00:00.000Z | 871 | 126 | 591727.0 | 679.0 |
+| 2026-07-01T00:00:00.000Z | 542 | 126 | 365626.0 | 675.0 |
+| 2026-08-01T00:00:00.000Z | 431 | 126 | 368224.0 | 854.0 |
 
 ## The collections worklist and how the bank's conduct rules say each account may be worked
 

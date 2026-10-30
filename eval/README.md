@@ -49,15 +49,18 @@ failures, mix score by grade, quarterly insurance, churn cohort size, weakest lo
 
 ### Results
 
-| Run | Score | What changed |
+The latest results are in `evidence/08_genie.md`, generated from the live workspace. The table below is the
+history from before the FE Bar build (September 2026), kept because the first run is the honest estimate.
+
+| Run (before the FE Bar build) | Score | What changed |
 |---|---|---|
 | **First run — the number that counts** | **12/15 (80%)** | Nothing. This is the generalisation estimate. |
-| Current regression | 13/15 (86.7%) | A **data** defect the suite exposed was fixed (`sla_tracker` did not reconcile with `complaints`). **No instruction was tuned**, and the suite's questions were not edited. |
+| Regression, September 2026 | 13/15 (86.7%) | A **data** defect the suite exposed was fixed (`sla_tracker` did not reconcile with `complaints`). **No instruction was tuned**, and the suite's questions were not edited. |
 
 Compare with 30/30 on the tuned suite. That gap — 100% in-sample against 80% held-out — is the single most
 useful number in this project, and it is why the tuned score should never be quoted on its own.
 
-**The two that still fail, diagnosed but deliberately not fixed:**
+**The two that failed in September 2026, diagnosed but deliberately not fixed** (both passed in the FE Bar build's run on 2026-10-29; Genie is not deterministic, so one passing run does not prove them fixed):
 
 * **HO-01 is a real agent defect, and the most instructive one found anywhere in this project.** Asked for
   the microfinance recovery rate, Genie joined `collections_activity` to `delinquency_monthly` on

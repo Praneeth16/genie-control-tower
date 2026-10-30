@@ -126,7 +126,8 @@ def build_cases_router() -> APIRouter:
             SELECT count_if(NOT within_rbi_hours) AS out_of_hours_contacts,
                    count(*) AS contacts
             FROM {FQ}.collections_activity
-            WHERE activity_date > add_months((SELECT max(snapshot_month) FROM {FQ}.delinquency_monthly), -2)""",
+            -- The latest month and the one before it: snapshot_month is the first of the month.
+            WHERE activity_date >= add_months((SELECT max(snapshot_month) FROM {FQ}.delinquency_monthly), -1)""",
                               w=w)["rows"][0]
         worklist = dbx.run_sql(f"""
             SELECT region, count(*) AS accounts, count_if(open_grievance) AS on_hold_grievance,
