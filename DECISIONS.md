@@ -81,3 +81,16 @@ Each entry has the same shape. It says what we chose, what the other options wer
 - Options. Fix every planted defect so the evidence shows a clean reconciliation, or leave the one truncated file as a break.
 - Choice. Leave it. The dialer's June file arrived 37 rows short and the reconciliation shows it.
 - Why. It shows the answer to "what happens with a late or corrupted file?" The break names the file and the missing rows.
+
+## 14. Publish the officers' case status back to Unity Catalog
+
+- Options. Leave the case queue in Lakebase only, or publish what officers do with each case back to a governed table.
+- Choice. The sync publishes each case's status, next action date, open actions and number of officer changes to `collections_case_status`, with the same region row filter. It does not publish the officers' notes or names.
+- Why. Lakebase is where people work the cases. Unity Catalog is where the bank asks questions. The Collections agent and the CRO's overview can now see the work as well as the worklist.
+
+## 15. Grant the personas the governed tables only
+
+- Options. Grant SELECT on the whole schema, or on each governed table.
+- Choice. SELECT on each governed table, granted by the cycle job after the pipeline has created the tables.
+- Why. The schema also holds bronze, silver and quarantine tables with raw identifiers and no policy. A schema-wide grant would let a persona go around every row filter and mask.
+

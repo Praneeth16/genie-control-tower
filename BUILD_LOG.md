@@ -89,3 +89,29 @@ I tested four things before writing the pipeline.
 
 - Development mode pauses every trigger and refuses to unpause them. The file-arrival trigger is part of the demo, so the target does not use development mode.
 - The Genie spaces, the dashboard and the Lakebase app resource are bundle resources. The app gets the space ids from the bundle.
+
+## 2026-10-30
+
+### Independent review
+
+I asked a second model (Codex) to review the build and the claims, read-only. It found real defects. I checked each one before fixing it.
+
+- The personas had SELECT on the whole schema, so they could read the bronze and quarantine tables, which hold raw identifiers and letter text with no filter or mask. Personas now get SELECT on the governed tables only. The persona probes now show all four personas refused on bronze and quarantine.
+- A proposer could execute or reject an action without the approver role. The role check sat after the separation-of-duties check, and execute and reject skipped that check's refusal. The role check now stands on its own.
+- The action routes did not check the caller's region, and the region was resolved from the subject while the conduct checks read a separate payload field. Every action route now checks the caller's Unity Catalog regions, and the payload must name the same record as the subject.
+- Switching cases in the worklist kept the previous case's form while the save target changed. The case panel is now keyed by case.
+- The Governance screen still read a field I had removed, so it would fail to render. It now shows the personas and the two clearance flags.
+- The sync could attach an earlier month's brief to a case. It now takes only a brief written from the current month end.
+- The history trigger recorded nine columns, not every business column, which did not match the decision I had written. It now records every business column.
+- Reconciliation assumed a file was loaded when it had no rows in silver or quarantine. For feeds with a silver layer, that would hide a total loss. It now counts zero loaded rows in that case.
+- A customer letter with no matching complaint had a NULL region, which the document filter treats as a public reference document. It now gets the region UNASSIGNED.
+- The overview's "last two months" window covered almost three months. It now covers the latest month and the one before it.
+- The number check in the evaluation took digits from JSON keys, so a key such as `contacts_90d` could vouch for an invented 90. It now reads only the values.
+- Lakebase output did not flow back to Unity Catalog. The sync now publishes each case's status to a governed table, `collections_case_status`, and the Collections agent can answer from it.
+- Several claims in the docs went further than the evidence. "Moved to a certified agency" became "recommended for reassignment". "Getting worse" became the measured spike and its later easing. The v3 numbers now name the July accounts they were measured on.
+
+### Network outage
+
+- A local network outage cut off the first Genie re-run and an app deploy. The evidence generator refused to reuse the old held-out results, which is what its new check is for. I re-ran Genie after the network came back.
+- An interrupted clone of the genie-design repository had landed inside this repository, and a deploy was uploading it. I removed it from the commit, the disk and the workspace.
+

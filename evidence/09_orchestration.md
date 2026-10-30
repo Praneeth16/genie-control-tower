@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-29 12:47 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-30 10:16 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # 09 — One job runs every stage
 
-_Generated 2026-10-29 12:47 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-30 10:16 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** One Lakeflow job runs the whole cycle in dependency order (pipeline, governance, AI briefs, AI evaluation, Lakebase sync), started by FILE ARRIVAL when a source drop's manifest lands; and after the run the worklist count agrees across gold, Lakebase and the app.
 
@@ -9,6 +9,8 @@ Job `112274750105468`, trigger: file arrival on `/Volumes/serverless_lakebase_pr
 
 | run_id | trigger | result | started (UTC) | duration | tasks (first attempt) |
 |---|---|---|---|---|---|
+| 442065786032196 | ONE_TIME | SUCCESS | 2026-10-30 10:14 | 63s | govern:DISABLED(0s), case_briefs:DISABLED(0s), evaluate_ai:DISABLED(0s), refresh_pipeline:DISABLED(0s), sync_cases:SUCCESS(57s), grant_personas:DISABLED(0s) |
+| 176820566676320 | ONE_TIME | SUCCESS | 2026-10-29 13:27 | 859s | govern:SUCCESS(63s), case_briefs:SUCCESS(29s), evaluate_ai:SUCCESS(592s), refresh_pipeline:SUCCESS(163s), sync_cases:SUCCESS(34s), grant_personas:SUCCESS(68s) |
 | 199261380563882 | ONE_TIME | SUCCESS | 2026-10-29 12:36 | 35s | govern:DISABLED(0s), case_briefs:DISABLED(0s), evaluate_ai:DISABLED(0s), refresh_pipeline:DISABLED(0s), sync_cases:SUCCESS(29s) |
 | 77252095941105 | ONE_TIME | SUCCESS | 2026-10-29 12:20 | 826s | govern:DISABLED(0s), case_briefs:SUCCESS(158s), evaluate_ai:SUCCESS(660s), refresh_pipeline:DISABLED(0s), sync_cases:SUCCESS(24s) |
 | 366295467750773 | FILE_ARRIVAL | SUCCESS | 2026-10-29 10:28 | 1134s | govern:SUCCESS(64s), case_briefs:SUCCESS(146s), evaluate_ai:SUCCESS(636s), refresh_pipeline:SUCCESS(274s), sync_cases:SUCCESS(44s) |

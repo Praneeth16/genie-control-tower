@@ -57,9 +57,9 @@ The headline figures are kept in [evidence/HEADLINES.md](evidence/HEADLINES.md).
 | Stage | What it does | Files |
 |---|---|---|
 | Lakeflow | Auto Loader reads 18 structured feeds, the scanned letters and the reference documents as they land. The dialer and field app feeds are conformed into one table by two flows. Quality rules quarantine bad rows with a reason. Every file is reconciled against its sender's manifest. Gold tables hold the business rules (DPD bucket, NPA, roll direction, RBI hours, SLA breach, incentive). | [pipeline/](pipeline/), [resources/pipeline.yml](resources/pipeline.yml) |
-| Unity Catalog | Row filters and column masks are declared in each gold table. Entitlements are rows in a table. Tags classify personal data. The conduct controls are UC functions. | [governance/](governance/), [pipeline/04_gold.sql](pipeline/04_gold.sql) |
+| Unity Catalog | Row filters and column masks are declared in each gold table. Entitlements are rows in a table. Personas get SELECT on the governed tables only. Tags classify personal data. The conduct controls are UC functions. | [governance/](governance/), [pipeline/04_gold.sql](pipeline/04_gold.sql) |
 | ML and GenAI | `ai_query` triages each letter inside the pipeline. A points score ranks the worklist. `ai_query` writes a brief for the top 200 accounts. The triage is graded against the ground the grievance desk recorded. The briefs are graded against the bank's conduct rules and by MLflow judges from a different model family. | [pipeline/06_intelligence.sql](pipeline/06_intelligence.sql), [ai/](ai/) |
-| Lakebase | The case queue, refreshed from gold every cycle. Officers own status, owner, notes and next date. A trigger writes the history, which refuses changes. The action plane needs a named approver for every action. | [lakebase/](lakebase/), [serve/sync_cases.py](serve/sync_cases.py) |
+| Lakebase | The case queue, refreshed from gold every cycle. Officers own status, owner, notes and next date. A trigger writes the history, which refuses changes. Each case's status is published back to a governed table that Genie reads. The action plane needs a named approver for every action. | [lakebase/](lakebase/), [serve/sync_cases.py](serve/sync_cases.py) |
 | Genie | Three governed agents, deployed from one spec, with business definitions, joins, example SQL and benchmarks. | [genie/](genie/), [resources/genie.yml](resources/genie.yml) |
 | Databricks App | The Overview for the CRO and the Worklist and Case for the Head of Collections, plus Ask, Approvals and Governance. Reads run as the signed-in user. | [app/](app/), [resources/app.yml](resources/app.yml) |
 | Orchestration | One job, triggered by file arrival on the manifests folder. | [resources/jobs.yml](resources/jobs.yml) |
@@ -80,6 +80,8 @@ The headline figures are kept in [evidence/HEADLINES.md](evidence/HEADLINES.md).
 10. We applied the Unity Catalog region rule to Lakebase rows in the app, with Unity Catalog as the source of truth.
 11. We triggered the cycle on file arrival, so a run starts only when a drop is complete.
 12. We kept the planted truncated file as a visible break, because it answers "what happens with a late or corrupted file?"
+13. We published the officers' case status from Lakebase back to a governed table, so Genie and the CRO see the work, not only the worklist.
+14. We granted the personas SELECT on the governed tables only, because the schema also holds raw layers with no policy.
 
 ## How AI tools were used
 
@@ -115,6 +117,7 @@ eval/            Genie benchmarks, held-out set, grader, persona probe
 tools/           SQL runner for job tasks, the held-back month, the evidence generator
 resources/       bundle resources: pipeline, jobs, personas, Genie, dashboard, app
 evidence/        text evidence from the final run
+deck/            the deck (HTML and PDF), its outline, and the role-play script
 ```
 
 ## How to run it
