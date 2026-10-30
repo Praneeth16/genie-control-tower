@@ -36,6 +36,13 @@ USING (SELECT '${ADMIN_PRINCIPAL}' AS principal, 'AI CoE administrator' AS perso
 ON t.principal = s.principal AND t.region = s.region
 WHEN NOT MATCHED THEN INSERT *;
 
+-- Each caller may see their OWN entitlement rows, and no one else's: who can see what is itself
+-- sensitive. The view runs the filter as the caller, so it is the only entitlement object personas get.
+CREATE OR REPLACE VIEW ${CATALOG}.${SCHEMA}.my_entitlements
+COMMENT 'The calling identity\'s own entitlement rows, directly or through an account group.'
+AS SELECT * FROM ${CATALOG}.${SCHEMA}.entitlements e
+WHERE e.principal = current_user() OR is_account_group_member(e.principal);
+
 -- ===========================================================================
 -- 2. Row filters
 -- ===========================================================================

@@ -82,8 +82,7 @@ def _scope(w=None) -> dict[str, Any]:
     entitlements = dbx.run_sql(
         f"""SELECT principal, persona, region, can_see_pii, can_see_complaint_text, granted_by,
                    CAST(granted_at AS STRING) AS granted_at
-            FROM {FQ}.entitlements e
-            WHERE IS_ACCOUNT_GROUP_MEMBER(e.principal) OR e.principal = CURRENT_USER()
+            FROM {FQ}.my_entitlements
             ORDER BY principal, region""", w=w)["rows"]
     identity = dbx.run_sql("SELECT CURRENT_USER() AS identity", w=w)["rows"][0]["identity"]
 

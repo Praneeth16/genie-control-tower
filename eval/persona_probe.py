@@ -26,6 +26,7 @@ PROBES = {
     "reference_docs_visible": """SELECT count(*) AS reference_documents FROM {fq}.complaint_documents
                                  WHERE document_type <> 'customer_letter'""",
     "guardrail_visibility": "SELECT {fq}.guardrail_visibility() AS visible",
+    "own_entitlements_only": "SELECT count(*) AS rows, count(DISTINCT principal) AS principals FROM {fq}.my_entitlements",
     # Raw layers carry identifiers and letter text with no filter or mask; no persona may read them.
     "bronze_complaints_access": "SELECT count(*) AS rows FROM {fq}.bronze_complaints",
     "quarantine_access": "SELECT count(*) AS rows FROM {fq}.quarantine_collections_activity",

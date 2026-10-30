@@ -115,3 +115,12 @@ I asked a second model (Codex) to review the build and the claims, read-only. It
 - A local network outage cut off the first Genie re-run and an app deploy. The evidence generator refused to reuse the old held-out results, which is what its new check is for. I re-ran Genie after the network came back.
 - An interrupted clone of the genie-design repository had landed inside this repository, and a deploy was uploading it. I removed it from the commit, the disk and the workspace.
 
+### Second review
+
+I asked Codex to check the fixes. It confirmed nine of the twelve and found new gaps, which I fixed.
+
+- On a fresh install, the grant task could run before the evaluation had created `ai_eval_summary`. The grant task now waits for the evaluation as well as the sync.
+- With table-level grants, a persona could no longer read the entitlements table, so the Governance screen would fail for anyone but the administrator. Granting the table would show everyone's access rows. Personas now read a view, `my_entitlements`, that returns only the caller's own rows. The probes show each persona reading only its own rows.
+- A request without a user token returned HTTP 500. It now returns 403.
+- An action whose subject did not resolve to a region skipped the region check. It is now refused.
+

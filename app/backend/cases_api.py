@@ -45,7 +45,12 @@ def visible_regions(request: Request) -> list[str]:
     row-filtered table rather than by calling region_visible() directly: the OBO token's restricted SQL
     scope may not invoke the function itself, but the filter applies to the read exactly as it does to
     every other query this person makes."""
-    rows = dbx.run_sql(f"SELECT DISTINCT region FROM {FQ}.loan_accounts", w=_user_client(request))["rows"]
+    try:
+        w = _user_client(request)
+    except PermissionError as e:
+        # No forwarded user token while REQUIRE_OBO is on: an authorisation failure, not a server error.
+        raise HTTPException(403, str(e))
+    rows = dbx.run_sql(f"SELECT DISTINCT region FROM {FQ}.loan_accounts", w=w)["rows"]
     return sorted(r["region"] for r in rows)
 
 

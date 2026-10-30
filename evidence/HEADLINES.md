@@ -1,7 +1,7 @@
-<!-- Generated 2026-10-30 10:32 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
+<!-- Generated 2026-10-30 11:09 UTC by tools/generate_evidence.py from the live workspace. Do not edit. -->
 # Headline figures
 
-_Generated 2026-10-30 10:32 UTC by `tools/generate_evidence.py` from the live workspace._
+_Generated 2026-10-30 11:09 UTC by `tools/generate_evidence.py` from the live workspace._
 
 **What this proves.** These are the figures the README and the deck quote. Each is computed from the live workspace after the final run, and the last column names the evidence file that shows it in full.
 

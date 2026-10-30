@@ -90,7 +90,9 @@ resources:
             parameters: [--root, "${workspace.file_path}", --file, governance/action_functions.sql, --file, governance/tags.sql,
                          --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}"]
         - task_key: grant_personas
-          depends_on: [{task_key: sync_cases}]
+          # After every task that creates a table it grants: sync_cases (collections_case_status) and
+          # evaluate_ai (ai_eval_summary). On a fresh install those tables do not exist before then.
+          depends_on: [{task_key: sync_cases}, {task_key: evaluate_ai}]
           environment_key: default
           spark_python_task:
             python_file: ../tools/run_sql.py

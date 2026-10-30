@@ -111,13 +111,17 @@ def build_actions_router(agent_name: str) -> APIRouter:
             # equals an agent name, so whoever asked could approve their own request. Now a person's
             # request needs a different person to approve it.
             region, branch = _subject_scope(req.subject)
+            region = region or req.region
+            if not region:
+                # Without a region there is nothing to check the caller's entitlement against.
+                raise HTTPException(400, f"cannot resolve a region for subject {req.subject}")
             _require_visible(request, region)
             action = ap.propose(
                 agent=agent_name,
                 action_type=req.action_type,
                 subject=req.subject,
                 payload=_canonical_payload(req.subject, req.payload),
-                region=region or req.region,
+                region=region,
                 requested_by=_end_user(request, agent_name),
                 level=req.level,
                 scheduled_at=req.scheduled_at,

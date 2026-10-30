@@ -328,6 +328,7 @@ def ev06(ctx: Ctx) -> None:
         ["letter text"] + pick("letter_text_sample", lambda v: v[0]["text_start"][:48] if v else "no rows"),
         ["reference documents visible"] + pick("reference_docs_visible", lambda v: v[0]["reference_documents"]),
         ["guardrail_visibility()"] + pick("guardrail_visibility", lambda v: v[0]["visible"]),
+        ["entitlement rows it can read (my_entitlements)"] + pick("own_entitlements_only", lambda v: f"{v[0]['rows']} rows, {v[0]['principals']} principal" if "rows" in v[0] else v[0]["refused"][:90]),
         ["read bronze_complaints (raw)"] + pick("bronze_complaints_access", lambda v: v[0].get("refused", f"READ {v[0].get('rows')} rows")[:90]),
         ["read quarantine (raw records)"] + pick("quarantine_access", lambda v: v[0].get("refused", f"READ {v[0].get('rows')} rows")[:90]),
     ]
