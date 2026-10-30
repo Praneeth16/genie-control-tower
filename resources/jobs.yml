@@ -1,0 +1,143 @@
+# Two jobs carry the whole journey.
+#
+#   ct_setup  once: storage, synthetic source files, governance policy, Lakebase schema.
+#   ct_cycle  every time a source drop completes: pipeline -> governance -> AI briefs -> {AI evaluation,
+#             Lakebase case sync} -> verification. Triggered by FILE ARRIVAL on the manifests folder, which
+#             every sender writes LAST, so a run starts only once a drop is complete.
+
+variables:
+  py_env_dependencies:
+    description: Shared Python dependencies for serverless job tasks.
+    type: complex
+    default:
+      - databricks-sdk>=0.96
+      - "psycopg[binary]>=3.1"
+
+resources:
+  jobs:
+    ct_setup:
+      name: genie-control-tower-setup
+      max_concurrent_runs: 1
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies: ${var.py_env_dependencies}
+      tasks:
+        - task_key: storage
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/storage.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}"]
+        - task_key: generate_source_files
+          depends_on: [{task_key: storage}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../data/generate_banking_data.py
+            parameters: [--landing, "/Volumes/${var.uc_catalog}/${var.uc_schema}/landing",
+                         --holdback, "/Volumes/${var.uc_catalog}/${var.uc_schema}/holdback",
+                         --bank, "${var.bank_name}"]
+        - task_key: governance_policy
+          depends_on: [{task_key: storage}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/policies.sql, --file, governance/access.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}",
+                         --var, "ADMIN_PRINCIPAL=${workspace.current_user.userName}",
+                         --var, "PSEUDONYM_SALT=${var.pseudonym_salt}",
+                         --var, "CRO=${var.persona_cro}", --var, "COLLECTIONS_HEAD=${var.persona_collections_head}",
+                         --var, "GRIEVANCE_OFFICER=${var.persona_grievance_officer}", --var, "AUDITOR=${var.persona_auditor}"]
+
+        - task_key: lakebase_schema
+          environment_key: default
+          spark_python_task:
+            python_file: ../scripts/lakebase_migrate.py
+            parameters: [--root, "${workspace.file_path}", --endpoint, "${var.lakebase_endpoint}",
+                         --schema, "${var.lakebase_schema}"]
+
+    ct_cycle:
+      name: genie-control-tower-cycle
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      trigger:
+        pause_status: UNPAUSED
+        file_arrival:
+          url: /Volumes/${var.uc_catalog}/${var.uc_schema}/landing/_manifests/
+          min_time_between_triggers_seconds: 60
+          wait_after_last_change_seconds: 60
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies: ${var.py_env_dependencies}
+        - environment_key: ai_eval
+          spec:
+            environment_version: "3"
+            dependencies:
+              - "mlflow[databricks]>=3.4"
+      tasks:
+        - task_key: refresh_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.control_tower.id}
+        - task_key: govern
+          depends_on: [{task_key: refresh_pipeline}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/action_functions.sql, --file, governance/tags.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}"]
+        - task_key: grant_personas
+          # After every task that creates a table it grants: sync_cases (collections_case_status) and
+          # evaluate_ai (ai_eval_summary). On a fresh install those tables do not exist before then.
+          depends_on: [{task_key: sync_cases}, {task_key: evaluate_ai}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, governance/grants.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}",
+                         --each, "PRINCIPAL=${var.persona_cro},${var.persona_collections_head},${var.persona_grievance_officer},${var.persona_auditor}"]
+        - task_key: case_briefs
+          depends_on: [{task_key: govern}]
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/run_sql.py
+            parameters: [--root, "${workspace.file_path}", --file, ai/case_brief.sql,
+                         --var, "CATALOG=${var.uc_catalog}", --var, "SCHEMA=${var.uc_schema}",
+                         --var, "AI_MODEL=${var.ai_model}", --var, "BRIEF_PROMPT_VERSION=${var.brief_prompt_version}",
+                         --var, "TOP_N=200"]
+        - task_key: evaluate_ai
+          depends_on: [{task_key: case_briefs}]
+          environment_key: ai_eval
+          spark_python_task:
+            python_file: ../ai/evaluate.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}",
+                         --judge-model, "${var.judge_model}", --experiment, "${var.mlflow_experiment}",
+                         --brief-prompt-version, "${var.brief_prompt_version}"]
+        - task_key: sync_cases
+          depends_on: [{task_key: case_briefs}]
+          # One unexplained SIGABRT in the first full cycle (succeeded on retry); retries make the
+          # cycle robust to it while it is investigated. The upsert is idempotent, so a retry is safe.
+          max_retries: 2
+          min_retry_interval_millis: 30000
+          environment_key: default
+          spark_python_task:
+            python_file: ../serve/sync_cases.py
+            parameters: [--catalog, "${var.uc_catalog}", --schema, "${var.uc_schema}",
+                         --endpoint, "${var.lakebase_endpoint}", --pg-schema, "${var.lakebase_schema}"]
+
+    ct_land_period:
+      name: genie-control-tower-land-next-period
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+      tasks:
+        - task_key: land
+          environment_key: default
+          spark_python_task:
+            python_file: ../tools/land_next_period.py
+            parameters: [--holdback, "/Volumes/${var.uc_catalog}/${var.uc_schema}/holdback",
+                         --landing, "/Volumes/${var.uc_catalog}/${var.uc_schema}/landing"]

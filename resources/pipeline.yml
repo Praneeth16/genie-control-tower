@@ -1,0 +1,21 @@
+resources:
+  pipelines:
+    control_tower:
+      name: genie-control-tower
+      catalog: ${var.uc_catalog}
+      schema: ${var.uc_schema}
+      serverless: true
+      channel: CURRENT
+      libraries:
+        - glob:
+            include: ../pipeline/**
+      configuration:
+        landing_path: /Volumes/${var.uc_catalog}/${var.uc_schema}/landing
+        catalog: ${var.uc_catalog}
+        schema: ${var.uc_schema}
+        # The single date the book is reported as at. SLA breach for open complaints is measured to it.
+        as_of_date: "2026-08-31"
+        ai_model: ${var.ai_model}
+        triage_prompt_version: ${var.triage_prompt_version}
+        # Pinned so IST wall-clock text from the dialer converts to the right UTC epoch.
+        spark.sql.session.timeZone: UTC

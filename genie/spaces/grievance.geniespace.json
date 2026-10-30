@@ -1,0 +1,451 @@
+{
+ "version": 2,
+ "config": {
+  "sample_questions": [
+   {
+    "id": "18a5c45b8dcfd70463220b34de88140e",
+    "question": [
+     "Which branches have the most open complaints past SLA?"
+    ]
+   },
+   {
+    "id": "196e44440cb9b5d52e98331747f65a99",
+    "question": [
+     "Why did payment-systems complaints spike in June 2026?"
+    ]
+   },
+   {
+    "id": "521c75e8fa86b2311812e5e60788894b",
+    "question": [
+     "How many complaints arrived through the RBI CMS channel?"
+    ]
+   },
+   {
+    "id": "6e98de8d12a0c20b836efe26d37798bc",
+    "question": [
+     "How many complaints escalated to the RBI Ombudsman, by category?"
+    ]
+   },
+   {
+    "id": "936875181fe2800df9539edfc4875ec2",
+    "question": [
+     "What is the chargeback win rate by merchant category?"
+    ]
+   },
+   {
+    "id": "d4535ae67f0cbca7742ef7c4ca96437b",
+    "question": [
+     "What is the SLA breach rate by RBI category this month?"
+    ]
+   },
+   {
+    "id": "f227b507ddb7aa19e585ccfbf387c2de",
+    "question": [
+     "What happened to UPI disputes on 14 and 15 June 2026?"
+    ]
+   }
+  ]
+ },
+ "data_sources": {
+  "tables": [
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master",
+    "description": [
+     "Branch dimension: branch_id, branch_name, city, state, region, zone. Join only for city, state, region or zone."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.chargebacks",
+    "description": [
+     "Card chargebacks only, not UPI. Key columns: chargeback_id, txn_date, raised_date, customer_id, card_type, merchant_category, txn_amount, reason_code, liability, status (Won/Lost/Open/Withdrawn), days_open, recovered_amount."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_ai_triage",
+    "description": [
+     "AI triage of each customer's complaint LETTER, produced inside the data pipeline: predicted_rbi_ground, alleges_conduct_breach (recovery-agent misconduct described in the letter), breach_types, urgency (high/medium/low) and a one-line summary. Join to complaints on complaint_id. It is read from the customer's own words and can differ from the ground the grievance desk recorded in complaints.rbi_category; say which one you used."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_categories",
+    "description": [
+     "Category dimension mapping internal codes to RBI Ombudsman grounds with the SLA in days. Codes: UPI, PAY, CRD, LON, DEP, MIS, REC, ATM, KYC, CHG. Key columns: category_code, category_name, rbi_category, sla_days."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaints",
+    "description": [
+     "PRIMARY TABLE for complaint-level questions: severity, channel, repeat complainants, ombudsman escalation, complaint text. One row per complaint. Note the UPI complaint spike on 2026-06-16 to 18, two days after a UPI switch degradation on 2026-06-14/15. Key columns: complaint_id, received_date, channel, category_code, customer_id, branch_id, product_code, severity, status, resolved_date, days_to_resolve, sla_days, sla_breached, escalated_to_ombudsman, repeat_complainant, complaint_text."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker",
+    "description": [
+     "PRE-AGGREGATED monthly complaint SLA performance by branch and RBI category. PREFER THIS over raw complaints for trends and breach rates: results stay small so they cannot be silently truncated. Carries region already. Key columns: report_month, branch_id, region, rbi_category, complaints_received, complaints_resolved, within_sla, breached_sla, avg_days_to_resolve, ombudsman_escalations."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes",
+    "description": [
+     "UPI dispute lifecycle, SEPARATE from complaints \u2014 do not assume a one-to-one link. auto_refunded reflects the NPCI rule that timed-out or declined UPI transactions reverse within 30 seconds. Switch degradation on 2026-06-14/15 produced ~10x volume and collapsed the auto-refund rate from ~78% to ~35%. Key columns: dispute_id, txn_date, raised_date, customer_id, branch_id, txn_amount, failure_reason, resolution_path, auto_refunded, resolution_seconds, status, psp_handle."
+    ]
+   }
+  ]
+ },
+ "instructions": {
+  "text_instructions": [
+   {
+    "id": "0e7fa9f1956d6033fde61a922dbaf83c",
+    "content": [
+     "### Space metadata\nYou answer questions about customer complaints, grievance redressal, UPI disputes and card\nchargebacks for an Indian retail bank. All amounts are Indian Rupees (INR). All data is synthetic.\nThe data covers 2025-03-01 to 2026-08-31 and the current month is 2026-08. When a question says\n\"now\", \"current\", \"latest\" or \"this month\", use August 2026.\nIf the question names NO period at all, use the FULL data window and say so. Do not narrow to the\ncurrent month unless the question asks for it \u2014 a silently injected period can reverse the answer to\na \"which is highest\" question, and the user has no way to see that it happened.\n\n### Data foundation\nFor complaint TRENDS, SLA BREACH RATES and regulatory roll-ups, PREFER sla_tracker. It is already\naggregated by month, branch and RBI category, so results stay small and cannot be silently\ntruncated. Use the raw complaints table only when the question needs complaint-level detail such as\nseverity, channel, repeat complainants, or complaint text.\nAn open complaint has status = 'Open' with NULL resolved_date and NULL days_to_resolve.\nFor what customers SAY in their letters (alleged misconduct, urgency), use complaint_ai_triage; it is an\nAI reading of the letter, a signal for review rather than a finding, and you must say so when you use it.\nupi_disputes is separate from complaints. A UPI dispute may or may not also become a complaint; do\nnot assume a one-to-one relationship.\nchargebacks covers card disputes only, never UPI.\n\n### Business terminology\nSLA breach means the complaint took longer than its category SLA to resolve, or is still open past\nthat SLA. sla_breached covers BOTH cases and is computed as of 2026-08-31: for a resolved complaint it\ncompares days_to_resolve against sla_days, and for an open one it ages received_date against sla_days.\nSo sla_breached is the right column for \"how many breached\", open or closed, and on open complaints it\nagrees exactly with DATEDIFF(DATE'2026-08-31', received_date) > sla_days.\nRecompute by ageing ONLY when the question asks as of a DIFFERENT date, and say which date you used.\nSLA breach rate means breached_sla / complaints_received from sla_tracker. Use complaints_received,\nNOT complaints_resolved: breached_sla counts every breach including complaints still open, and\nwithin_sla + breached_sla = complaints_received, so received is the denominator that reconciles.\ncomplaints_resolved can also be zero for a branch-month, which makes that ratio divide by zero.\nsla_tracker is a genuine rollup of complaints, so the two tables agree: summing complaints_received gives\nexactly the complaints row count for the same scope. Prefer sla_tracker for month/branch/category\nroll-ups and complaints when you need per-complaint detail.\nRBI CMS means the RBI Complaint Management System; channel = 'RBI CMS' is a regulatory escalation.\nOmbudsman escalation means escalated_to_ombudsman = TRUE \u2014 the most serious outcome.\nAgeing means days a complaint has been open: DATEDIFF(DATE'2026-08-31', received_date) for open ones.\nAuto-refund rate means the share of UPI disputes with auto_refunded = TRUE. A falling rate means\nmanual investigation load is rising.\nChargeback win rate means Won / (Won + Lost), excluding Open and Withdrawn.\nTAT means turnaround time, the same as days_to_resolve.\nRBI grounds of complaint are the values in rbi_category: Payment systems, Cards, Loans and\nadvances, Deposit accounts, Mis-selling, Recovery agents, Levy of charges, Other.\nThe product a complaint relates to is complaints.product_code. The codes are:\nMFI = Microfinance Group Loan (say \"microfinance\"), CV = Commercial Vehicle Loan, PV = Passenger\nVehicle Loan, TW = Two Wheeler Loan, HL = Home Loan, PL = Personal Loan, BL = Business Loan,\nCC = Credit Card. upi_disputes and chargebacks also carry product_code.\nA question about complaints FROM a particular product's customers is IN SCOPE: filter on product_code\nand, for a city or region, join branch_master. \"Are microfinance customers in Solapur complaining\nmore\" is answered here as complaints WHERE product_code = 'MFI' joined to branch_master WHERE\ncity = 'Solapur'.\n\n### Investigating a spike\nWhen asked why complaints or SLA breaches rose in a period, look for a cause upstream in the same data\n(for example a jump in UPI dispute volume or a fall in the auto-refund rate a few days earlier) and show\nthat chain with numbers, rather than describing the spike alone.\n\n### CRITICAL response standards\nALWAYS STATE THE COMPUTED ANSWER IN WORDS, as a number, before anything else. If you want to offer a\nbreakdown, state the answer first and then offer it. Never reply with only a follow-up question: the\nresult grid is not the answer a person reads, and a reply that asks \"would you prefer this by card\ntype?\" without giving the figure has answered nothing.\nWhen the question names a value that exists LITERALLY in a column, filter on exactly that value. Do\nnot widen it to related values. \"Affluent customers\" means customer_segment = 'Affluent', not\nAffluent plus Private plus Mass Affluent. If you believe the wider reading is what was meant, give\nthe exact answer first, then say what the wider figure would be and that it is a different question.\nAlways state the scope: the month or date range, the category, and the branch or region. Row-level\nsecurity is enforced, so different users legitimately see different totals.\nRound percentages to one decimal place. Format INR with thousands separators.\nNEVER quote a total you did not compute in SQL.\nWhen asked WHY, compare the affected slice against a control slice or the prior period.\nIf a result would exceed 200 rows, aggregate further or LIMIT and say so.\n\n### Error handling\nIf a question needs a column not present in these six tables, name the missing column rather than\nsubstituting a similar one.\nIf a question is about loan delinquency, DPD buckets, recovery-agent performance, or\nrelationship-manager incentives, say it belongs to a different domain agent. But do NOT decline a\nquestion merely because it names a lending product: complaint volume, SLA breach and ombudsman\nexposure FOR a product's customers is this agent's own subject. Decline only the delinquency or\nrecovery METRICS themselves."
+    ]
+   }
+  ],
+  "example_question_sqls": [
+   {
+    "id": "06c37f78ed3233c1a87c6e751d96b824",
+    "question": [
+     "Show the payment-systems SLA breach rate by month over the last year."
+    ],
+    "sql": [
+     "SELECT report_month, SUM(complaints_resolved) AS resolved, SUM(breached_sla) AS breached,\n       ROUND(100.0 * SUM(breached_sla) / NULLIF(SUM(complaints_received), 0), 1) AS breach_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker WHERE rbi_category = 'Payment systems' AND report_month >= DATE'2025-09-01'\nGROUP BY report_month ORDER BY report_month"
+    ]
+   },
+   {
+    "id": "396f53b96b395ccc23b6b360b5997c4d",
+    "question": [
+     "Did the June UPI incident drive a complaint spike, and how long after?"
+    ],
+    "sql": [
+     "SELECT received_date, COUNT(*) AS upi_complaints,\n       SUM(CASE WHEN sla_breached THEN 1 ELSE 0 END) AS breached,\n       ROUND(AVG(days_to_resolve), 1) AS avg_tat_days\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints WHERE category_code = 'UPI'\n  AND received_date BETWEEN DATE'2026-06-10' AND DATE'2026-06-25'\nGROUP BY received_date ORDER BY received_date"
+    ]
+   },
+   {
+    "id": "3fec4bd182e314a1953c77c1185f0e33",
+    "question": [
+     "What is the SLA breach rate by RBI category for the latest month?"
+    ],
+    "sql": [
+     "SELECT rbi_category, SUM(complaints_received) AS received, SUM(complaints_resolved) AS resolved,\n       SUM(breached_sla) AS breached,\n       ROUND(100.0 * SUM(breached_sla) / NULLIF(SUM(complaints_received), 0), 1) AS breach_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker WHERE report_month = DATE'2026-08-01'\nGROUP BY rbi_category ORDER BY breach_pct DESC"
+    ]
+   },
+   {
+    "id": "45f0596244b29ffd24feb75614072d30",
+    "question": [
+     "What is the chargeback win rate by merchant category?"
+    ],
+    "sql": [
+     "SELECT merchant_category, COUNT(*) AS cases,\n       SUM(CASE WHEN status = 'Won' THEN 1 ELSE 0 END) AS won,\n       SUM(CASE WHEN status = 'Lost' THEN 1 ELSE 0 END) AS lost,\n       ROUND(100.0 * SUM(CASE WHEN status = 'Won' THEN 1 ELSE 0 END)\n             / NULLIF(SUM(CASE WHEN status IN ('Won','Lost') THEN 1 ELSE 0 END), 0), 1) AS win_rate_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.chargebacks GROUP BY merchant_category ORDER BY cases DESC"
+    ]
+   },
+   {
+    "id": "50de9e5a19f6b1e7a9b123e6f6664416",
+    "question": [
+     "Which branches have the most open complaints past SLA right now?"
+    ],
+    "sql": [
+     "SELECT b.city, b.region, COUNT(*) AS open_complaints,\n       SUM(CASE WHEN DATEDIFF(DATE'2026-08-31', c.received_date) > c.sla_days THEN 1 ELSE 0 END) AS past_sla,\n       ROUND(AVG(DATEDIFF(DATE'2026-08-31', c.received_date)), 1) AS avg_age_days\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints c JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b ON c.branch_id = b.branch_id\nWHERE c.status = 'Open' GROUP BY b.city, b.region ORDER BY past_sla DESC LIMIT 15"
+    ]
+   },
+   {
+    "id": "8b77ce95ce1a6a1f82d5b68ea0eeacbb",
+    "question": [
+     "What happened to UPI disputes in June 2026, day by day?"
+    ],
+    "sql": [
+     "SELECT txn_date, COUNT(*) AS disputes,\n       SUM(CASE WHEN auto_refunded THEN 1 ELSE 0 END) AS auto_refunded,\n       ROUND(100.0 * SUM(CASE WHEN auto_refunded THEN 1 ELSE 0 END) / COUNT(*), 1) AS auto_refund_pct,\n       SUM(CASE WHEN failure_reason = 'Switch degradation' THEN 1 ELSE 0 END) AS switch_degradation\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes WHERE txn_date BETWEEN DATE'2026-06-01' AND DATE'2026-06-30'\nGROUP BY txn_date ORDER BY txn_date"
+    ]
+   },
+   {
+    "id": "9bed8ba90fc410618e637d110d50dc69",
+    "question": [
+     "How many complaints were escalated to the RBI Ombudsman, by category?"
+    ],
+    "sql": [
+     "SELECT cc.rbi_category, cc.category_name, COUNT(*) AS complaints,\n       SUM(CASE WHEN c.escalated_to_ombudsman THEN 1 ELSE 0 END) AS escalations,\n       ROUND(100.0 * SUM(CASE WHEN c.escalated_to_ombudsman THEN 1 ELSE 0 END) / COUNT(*), 2) AS escalation_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints c JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_categories cc ON c.category_code = cc.category_code\nGROUP BY cc.rbi_category, cc.category_name ORDER BY escalations DESC"
+    ]
+   },
+   {
+    "id": "b39f3e27841dac6c60f2e62b486f66dd",
+    "question": [
+     "Are microfinance customers in Solapur complaining more this year?"
+    ],
+    "sql": [
+     "SELECT DATE_TRUNC('MONTH', c.received_date) AS month, COUNT(*) AS complaints,\n       SUM(CASE WHEN c.sla_breached THEN 1 ELSE 0 END) AS breached,\n       SUM(CASE WHEN c.category_code = 'REC' THEN 1 ELSE 0 END) AS recovery_conduct_complaints,\n       SUM(CASE WHEN c.escalated_to_ombudsman THEN 1 ELSE 0 END) AS ombudsman\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints c\nJOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b ON c.branch_id = b.branch_id\nWHERE c.product_code = 'MFI' AND b.city = 'Solapur'\nGROUP BY DATE_TRUNC('MONTH', c.received_date)\nORDER BY month"
+    ]
+   }
+  ],
+  "join_specs": [
+   {
+    "id": "3587943b5cc8958d99debc75da3bd3a9",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaints",
+     "alias": "complaints"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master",
+     "alias": "branch_master"
+    },
+    "sql": [
+     "`complaints`.`branch_id` = `branch_master`.`branch_id`",
+     "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+    ]
+   },
+   {
+    "id": "645033d9a3c036fd3d252de0840815c4",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaints",
+     "alias": "complaints"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_categories",
+     "alias": "complaint_categories"
+    },
+    "sql": [
+     "`complaints`.`category_code` = `complaint_categories`.`category_code`",
+     "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+    ]
+   },
+   {
+    "id": "6b54ecc12d572a9fe86dd48830caf322",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker",
+     "alias": "sla_tracker"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master",
+     "alias": "branch_master"
+    },
+    "sql": [
+     "`sla_tracker`.`branch_id` = `branch_master`.`branch_id`",
+     "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+    ]
+   },
+   {
+    "id": "b5a6c126228b14156f36d63ee7de33b9",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_ai_triage",
+     "alias": "complaint_ai_triage"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.complaints",
+     "alias": "complaints"
+    },
+    "sql": [
+     "`complaint_ai_triage`.`complaint_id` = `complaints`.`complaint_id`",
+     "--rt=FROM_RELATIONSHIP_TYPE_ONE_TO_ONE--"
+    ]
+   },
+   {
+    "id": "b8d5b2c7c8f9482cfe3f3e3e3dbb1f54",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes",
+     "alias": "upi_disputes"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master",
+     "alias": "branch_master"
+    },
+    "sql": [
+     "`upi_disputes`.`branch_id` = `branch_master`.`branch_id`",
+     "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+    ]
+   }
+  ],
+  "sql_snippets": {
+   "measures": [
+    {
+     "id": "663cc5b978fe8c6858e2cf13028f09a3",
+     "alias": "chargeback_win_pct",
+     "sql": [
+      "100.0 * SUM(CASE WHEN chargebacks.status = 'Won' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN chargebacks.status IN ('Won','Lost') THEN 1 ELSE 0 END), 0)"
+     ],
+     "display_name": "chargeback win percent",
+     "instruction": [
+      "WHEN_TO_USE: card dispute outcome quality. SCOPE_TABLES: chargebacks. RISK_IF_MISUSED: Open and Withdrawn cases must be excluded from the denominator."
+     ]
+    },
+    {
+     "id": "7e55399f717e500f1dabd08e12ded829",
+     "alias": "auto_refund_pct",
+     "sql": [
+      "100.0 * SUM(CASE WHEN upi_disputes.auto_refunded THEN 1 ELSE 0 END) / COUNT(*)"
+     ],
+     "display_name": "UPI auto-refund percent",
+     "instruction": [
+      "WHEN_TO_USE: UPI dispute automation efficiency. SCOPE_TABLES: upi_disputes. RISK_IF_MISUSED: do not apply to complaints or chargebacks; auto-refund is UPI-only."
+     ]
+    },
+    {
+     "id": "ba1de09e46f33934f3e4ef13e09f2344",
+     "alias": "sla_breach_pct",
+     "sql": [
+      "100.0 * SUM(sla_tracker.breached_sla) / NULLIF(SUM(sla_tracker.complaints_received), 0)"
+     ],
+     "display_name": "SLA breach percent",
+     "instruction": [
+      "WHEN_TO_USE: the headline regulatory metric for grievance redressal. SCOPE_TABLES: sla_tracker. RISK_IF_MISUSED: the denominator is complaints_received, NOT complaints_resolved. breached_sla counts every breach including complaints still open, so within_sla + breached_sla = complaints_received and received is the denominator that reconciles; complaints_resolved is also zero for some branch-months, which divides by zero."
+     ]
+    }
+   ]
+  }
+ },
+ "benchmarks": {
+  "questions": [
+   {
+    "id": "047d4778efddaa770d5f2db86bd71cf1",
+    "question": [
+     "What was the payment-systems SLA breach percentage in June 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT ROUND(100.0 * SUM(breached_sla) / NULLIF(SUM(complaints_received), 0), 1) AS breach_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker WHERE rbi_category = 'Payment systems' AND report_month = DATE'2026-06-01'"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "24c32252ccded1d34478e5868cdbe2ef",
+    "question": [
+     "How many UPI disputes were raised on 14 June 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS disputes FROM serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes WHERE txn_date = DATE'2026-06-14'"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "40cee63d23cc7e0d37934407119d906e",
+    "question": [
+     "How many complaints are still open as of 31 August 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS open_complaints FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints WHERE status = 'Open'"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "476c052b013509c7cfee4eb0a9928586",
+    "question": [
+     "How many UPI complaints were received on 17 June 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS upi_complaints FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints WHERE category_code = 'UPI' AND received_date = DATE'2026-06-17'"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "49deaee4564e58436a8746a228f65cbc",
+    "question": [
+     "What is the SLA breach rate by RBI category for August 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT rbi_category, ROUND(100.0 * SUM(breached_sla) / NULLIF(SUM(complaints_received), 0), 1) AS breach_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker WHERE report_month = DATE'2026-08-01' GROUP BY rbi_category ORDER BY breach_pct DESC"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "4e76c6759d6ae13be8e3eb17118119e9",
+    "question": [
+     "How many complaints were escalated to the RBI Ombudsman in total?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS escalations FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints WHERE escalated_to_ombudsman = TRUE"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "81019615e978aaf7301011846787e03c",
+    "question": [
+     "How many complaint letters allege recovery-agent misconduct, according to the AI triage?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS letters FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_ai_triage WHERE alleges_conduct_breach"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "87cab8fd6b1efecc2b24d20150eb376b",
+    "question": [
+     "How many complaints arrived through the RBI CMS channel?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS rbi_cms_complaints FROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints WHERE channel = 'RBI CMS'"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "b1553ac2c4520a8b01dc86687a25b1ea",
+    "question": [
+     "What was the UPI auto-refund percentage on 15 June 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT ROUND(100.0 * SUM(CASE WHEN auto_refunded THEN 1 ELSE 0 END) / COUNT(*), 1) AS auto_refund_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes WHERE txn_date = DATE'2026-06-15'"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "c4eacbba0fa6e6bba41277560fd2ef28",
+    "question": [
+     "Which RBI category has the highest ombudsman escalation percentage?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT cc.rbi_category,\n       ROUND(100.0 * SUM(CASE WHEN c.escalated_to_ombudsman THEN 1 ELSE 0 END) / COUNT(*), 2) AS escalation_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.complaints c JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_categories cc ON c.category_code = cc.category_code\nGROUP BY cc.rbi_category ORDER BY escalation_pct DESC LIMIT 1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "dd0d2979c53bdd7a059f11c096814b81",
+    "question": [
+     "What is the overall chargeback win rate?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT ROUND(100.0 * SUM(CASE WHEN status = 'Won' THEN 1 ELSE 0 END)\n             / NULLIF(SUM(CASE WHEN status IN ('Won','Lost') THEN 1 ELSE 0 END), 0), 1) AS win_rate_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.chargebacks"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

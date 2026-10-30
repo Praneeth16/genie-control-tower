@@ -172,6 +172,7 @@ class ActionPlane:
         branch_id: str | None = None,
         session_uuid: str | None = None,
         trace_id: str | None = None,
+        case_id: int | None = None,
     ) -> dict[str, Any]:
         """Create a new action in status `proposed` + its first `action_events` row.
 
@@ -188,10 +189,10 @@ class ActionPlane:
         row = lakebase.execute(
             "INSERT INTO actions "
             "(agent, action_type, subject, payload, status, level, region, branch_id, "
-            " scheduled_at, session_uuid, trace_id, requested_by) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+            " scheduled_at, session_uuid, trace_id, requested_by, case_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
             (agent, action_type, subject, _as_jsonb(payload), PROPOSED,
-             level, region, branch_id, scheduled_at, session_uuid, trace_id, requested_by),
+             level, region, branch_id, scheduled_at, session_uuid, trace_id, requested_by, case_id),
             returning=True,
         )
         self._event(row["id"], "proposed", requested_by,
@@ -219,7 +220,8 @@ class ActionPlane:
         action = self._require(action_id)
         self._check_transition(action["status"], REJECTED)
         row = lakebase.execute(
-            "UPDATE actions SET status = %s, approved_by = %s, decided_at = now() "
+            # rejected_by, not approved_by: the trail used to record every rejection as an approval.
+            "UPDATE actions SET status = %s, rejected_by = %s, decided_at = now() "
             "WHERE id = %s AND status = %s RETURNING *",
             (REJECTED, approver, action_id, action["status"]),
             returning=True,

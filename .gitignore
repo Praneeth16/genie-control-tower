@@ -1,6 +1,6 @@
 # Local secrets and per-workspace ids
 .env
-# Generated from app.yaml.template by scripts/render_app_yaml.py; contains this workspace's ids.
+# The bundle supplies the app's command and environment (resources/app.yml); never commit a local app.yaml.
 app/app.yaml
 .env.*
 !app/.env.example
@@ -10,7 +10,6 @@ app/app.yaml
 
 # Generated: recreated by the setup scripts, and workspace-specific
 genie/space_ids.json
-dashboards/control_tower.lvdash.json
 data/out/
 data/row_counts.json
 app/backend/row_counts.json
@@ -26,3 +25,7 @@ app/frontend/tsconfig.tsbuildinfo
 __pycache__/
 *.pyc
 .venv/
+# FE Bar build
+.databricks/
+*.pem
+.code-review-graph/

@@ -47,14 +47,15 @@ def main() -> int:
         f"GRANT EXECUTE ON SCHEMA {config.FQ} TO `{sp}`",
         # Write the generated drafts back to the volume as UNSIGNED documents.
         f"GRANT READ VOLUME, WRITE VOLUME ON VOLUME {config.FQ}.{config.VOLUME} TO `{sp}`",
-        f"GRANT READ VOLUME ON VOLUME {config.FQ}.seed TO `{sp}`",
         # The unrestricted entitlement WITHOUT which every guardrail is blinded. This is the row that
-        # `assert_not_blinded()` checks the effect of, and the reason it checks on every evaluation.
-        f"DELETE FROM {config.FQ}.region_entitlement WHERE principal = '{sp}'",
-        f"INSERT INTO {config.FQ}.region_entitlement (principal, region, granted_by, granted_at) "
-        f"VALUES ('{sp}', 'ALL', 'install', current_timestamp())",
+        # `assert_not_blinded()` checks the effect of, and the reason it checks on every evaluation. Region
+        # ALL, but no PII and no free text: the controls join on pseudonyms, which are one-to-one.
+        f"DELETE FROM {config.FQ}.entitlements WHERE principal = '{sp}'",
+        f"INSERT INTO {config.FQ}.entitlements (principal, persona, region, can_see_pii, can_see_complaint_text, "
+        f"granted_by, granted_at) VALUES ('{sp}', 'App guardrail identity', 'ALL', FALSE, FALSE, 'install', "
+        f"current_timestamp())",
     ]
-    if config.VS_INDEX:
+    if config.VS_ENDPOINT:
         statements.append(f"GRANT SELECT ON TABLE {config.VS_INDEX} TO `{sp}`")
         statements.append(f"GRANT SELECT ON TABLE {config.FQ}.document_index_source TO `{sp}`")
 
@@ -70,9 +71,28 @@ def main() -> int:
             failed += 1
             print(f"  FAIL {stmt[:96]}\n       {type(e).__name__}: {str(e)[:150]}")
 
+    # Lakebase: the app's Postgres role (created by the app's postgres resource) reads and writes the
+    # case queue and the action plane. No DELETE anywhere; the history tables refuse UPDATE by trigger.
+    pg = [f'GRANT USAGE ON SCHEMA "{config.LAKEBASE_SCHEMA}" TO "{sp}"',
+          f'GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA "{config.LAKEBASE_SCHEMA}" TO "{sp}"',
+          f'GRANT USAGE ON ALL SEQUENCES IN SCHEMA "{config.LAKEBASE_SCHEMA}" TO "{sp}"']
     if a.dry_run:
+        for stmt in pg:
+            print(f"  would run (Lakebase): {stmt}")
         return 0
-    print(f"\n{len(statements) - failed}/{len(statements)} grants applied")
+    import psycopg
+    host = w.postgres.get_endpoint(name=config.LAKEBASE_ENDPOINT).status.hosts.host
+    token = w.postgres.generate_database_credential(endpoint=config.LAKEBASE_ENDPOINT).token
+    with psycopg.connect(host=host, dbname=config.LAKEBASE_DBNAME, user=w.current_user.me().user_name,
+                         password=token, sslmode="require", autocommit=True) as conn:
+        for stmt in pg:
+            try:
+                conn.execute(stmt)
+                print(f"  ok   {stmt}")
+            except Exception as e:
+                failed += 1
+                print(f"  FAIL {stmt}\n       {type(e).__name__}: {str(e)[:150]}")
+    print(f"\n{len(statements) + len(pg) - failed}/{len(statements) + len(pg)} grants applied")
     if not failed:
         print("Verify with /api/health: `guardrail_blinded` must be false.")
     return 1 if failed else 0

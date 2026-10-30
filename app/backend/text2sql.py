@@ -15,16 +15,11 @@ from functools import lru_cache
 import config
 import databricks_client as dbx
 
-# The three space definitions are bundled inside backend/ so the app is self-contained when Apps
-# deploys it standalone; the repo copy under genie/ is the editing source of truth. Callers always
-# pass an explicit path, so this default only matters if one forgets to.
+# The three space definitions are generated into backend/ by genie/create_genie_agents.py --write, from
+# the same spec the Genie spaces are deployed from. Callers always pass an explicit path, so this default
+# only matters if one forgets to.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_BUNDLED = os.path.join(_HERE, "collections_space.md")
-_REPO = os.path.normpath(os.path.join(_HERE, "..", "..", "genie", "collections_space.md"))
-_DEFAULT_GENIE = os.environ.get(
-    "GENIE_INSTRUCTIONS_PATH",
-    _BUNDLED if os.path.isfile(_BUNDLED) else _REPO,
-)
+_DEFAULT_GENIE = os.environ.get("GENIE_INSTRUCTIONS_PATH", os.path.join(_HERE, "collections_space.md"))
 
 _SYSTEM_PREAMBLE = """You are a Spark SQL generator for a governed Databricks lakehouse.
 Use ONLY the tables, columns, and business definitions described below. Never invent columns.

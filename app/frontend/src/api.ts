@@ -140,7 +140,10 @@ export interface ScopeTable {
 
 export interface Scope {
   identity: string | null;
-  group_memberships: Record<string, boolean>;
+  /** The business roles this caller's entitlement rows grant. Entitlements are data, not group checks. */
+  personas: string[];
+  can_see_pii: boolean;
+  can_see_complaint_text: boolean;
   entitlements: Record<string, string>[];
   tables: ScopeTable[];
   unrestricted: boolean;
@@ -231,6 +234,67 @@ export interface SearchResult {
   note: string;
 }
 
+// --- the case queue (Lakebase) and the overview (gold) ---------------------------
+export interface CaseRow {
+  case_id: number;
+  loan_account_id: string;
+  region: string;
+  branch_id: string;
+  product_code: string;
+  dpd_days: number;
+  dpd_bucket: string;
+  outstanding_principal: string | number;
+  priority_score: number;
+  priority_rank: number;
+  drivers: string[];
+  conduct_flags: string[];
+  recommended_treatment: string;
+  ai_explanation: string | null;
+  ai_recommended_action: string | null;
+  status: string;
+  owner: string | null;
+  notes?: string | null;
+  next_action_date: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+  refreshed_at: string;
+}
+
+export interface CaseHistory {
+  changed_at: string;
+  changed_by: string;
+  change_source: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+}
+
+export interface CaseDetail {
+  case: CaseRow;
+  history: CaseHistory[];
+  actions: { id: number; action_type: string; status: string; requested_by: string;
+             approved_by: string | null; rejected_by: string | null; created_at: string }[];
+}
+
+export interface CaseList {
+  regions: string[];
+  cases: CaseRow[];
+  by_status: Record<string, number>;
+  source: string;
+}
+
+type Row = Record<string, string | number | null>;
+export interface Overview {
+  kpis: Row;
+  conduct: Row;
+  worklist_by_region: Row[];
+  completeness: Row[];
+  breaks: Row[];
+  quality: Row[];
+  ai_quality: Row[];
+  journey: { stage: string; what: string }[];
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
@@ -263,6 +327,15 @@ function post<T>(url: string, body?: unknown): Promise<T> {
 
 export const api = {
   health: () => req<Health>("/api/health"),
+  overview: () => req<Overview>("/api/overview"),
+  cases: (status?: string) => req<CaseList>(`/api/cases${status ? `?status=${status}` : ""}`),
+  caseDetail: (id: number) => req<CaseDetail>(`/api/cases/${id}`),
+  updateCase: (id: number, body: { status?: string; owner?: string; notes?: string; next_action_date?: string | null }) =>
+    req<{ case: CaseRow }>(`/api/cases/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   ask: (question: string) => post<AskResult>("/api/ask", { question }),
   feedback: (session_uuid: string, rating: number, note?: string) =>
     post<{ feedback_id: number }>("/api/feedback", { session_uuid, rating, note }),
@@ -277,6 +350,7 @@ export const api = {
     scheduled_at?: string | null;
     session_uuid?: string | null;
     trace_id?: string | null;
+    case_id?: number | null;
   }) => post<{ action: Action; guardrail: Guardrail; approver_role: string | null }>("/api/act", body),
   actions: (status?: string) =>
     req<{ actions: Action[] }>(`/api/actions${status ? `?status=${status}` : ""}`),

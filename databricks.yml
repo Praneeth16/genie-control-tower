@@ -19,11 +19,38 @@
 bundle:
   name: genie-control-tower
 
+# The persona service principals run the probe jobs as themselves, so they must be able to READ the
+# deployed files. View only: they cannot edit or run anything else.
+permissions:
+  - level: CAN_MANAGE
+    user_name: ${workspace.current_user.userName}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_cro}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_collections_head}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_grievance_officer}
+  - level: CAN_VIEW
+    service_principal_name: ${var.persona_auditor}
+
+# The journey, one file per stage: the Lakeflow pipeline, the jobs that run it end to end, and the app.
+include:
+  - resources/pipeline.yml
+  - resources/jobs.yml
+  - resources/personas.yml
+  - resources/genie.yml
+  - resources/dashboard.yml
+  - resources/app.yml
+
 # Without this block the bundle uploads node_modules FILE BY FILE — 419MB across app/frontend and
 # scripts — and `bundle deploy` appears to hang with no output for half an hour before it ever reaches
 # the app deployment step. Only `app/frontend/dist` is needed at runtime (uvicorn serves the built
 # bundle); the sources that produce it are not, and neither is the QA browser driver.
 sync:
+  # The built frontend is gitignored (it is build output) but the app serves it, so it must still sync.
+  # Build it first: npm --prefix app/frontend run build.
+  include:
+    - app/frontend/dist/**
   exclude:
     - "**/node_modules"
     # Local secrets and per-workspace ids. Never syncs to the workspace, never commits.
@@ -36,12 +63,12 @@ sync:
     - "**/.venv"
     - "**/*.pyc"
     - ".databricks"
-    # Generated CSVs: the tables are already loaded in Unity Catalog, so shipping the raw extracts adds
-    # megabytes and a second, staler copy of the same data.
-    - "data/out"
+    # Local tooling, and the frontend sources: the app serves the built bundle only.
+    - ".venv"
+    - ".code-review-graph"
+    - "app/frontend/src"
     # Benchmark output. Useful history in the repo, dead weight in the deployed app.
     - "eval/results"
-    - "research/raw"
 
 variables:
   # No defaults for anything workspace-specific, on purpose. A default that points at the workspace this
@@ -59,16 +86,11 @@ variables:
     description: |
       Unity Catalog holding the workshop schema. Must already exist, and you need CREATE SCHEMA on it.
   uc_schema:
-    description: Schema created by data/ddl.sql.
+    description: Schema the pipeline publishes to (created by the setup job, governance/storage.sql).
     default: control_tower_banking
   uc_volume:
     description: Volume holding letters, agency contracts and generated drafts.
     default: docs
-  lakebase_instance:
-    description: |
-      Lakebase (serverless Postgres) instance for the approval state machine and action lineage.
-      Lakebase has a per-workspace instance quota, so reusing an existing instance is normal —
-      this project isolates its state in its own SCHEMA, not by instance.
   lakebase_schema:
     description: Postgres schema for the action plane.
     default: control_tower
@@ -77,19 +99,7 @@ variables:
       Model serving endpoint used by the supervisor's router and answer fuser. Any chat model.
     default: databricks-claude-sonnet-4-5
 
-  # --- created by the setup scripts; fill in after running them -----------------
-  collections_space_id:
-    description: Genie space id from `python3 genie/create_genie_agents.py --create`.
-    default: ""
-  grievance_space_id:
-    description: Genie space id from `python3 genie/create_genie_agents.py --create`.
-    default: ""
-  rm_space_id:
-    description: Genie space id from `python3 genie/create_genie_agents.py --create`.
-    default: ""
-  dashboard_id:
-    description: Printed by `python3 dashboards/build_dashboard.py --deploy`. Blank hides the tab.
-    default: ""
+  # --- optional ------------------------------------------------------------------
   vs_endpoint:
     description: |
       Vector Search endpoint name for semantic document search. Endpoints are shared, billable,
@@ -133,12 +143,47 @@ variables:
       actions are then proposed, guardrailed and approved without an outbound call.
     default: ""
 
+  # --- the FE Bar build ----------------------------------------------------------
+  ai_model:
+    description: |
+      Foundation model endpoint for the in-pipeline letter triage and the case briefs. Must support
+      structured output (responseFormat json_schema) with ai_query.
+    default: databricks-claude-sonnet-4-6
+  judge_model:
+    description: |
+      Judge for the MLflow evaluation of the AI output. Deliberately a DIFFERENT model family from
+      ai_model, so the judge does not share the generator's blind spots.
+    default: databricks-gpt-5-5
+  triage_prompt_version:
+    description: Prompt version for the letter triage (see pipeline/06_intelligence.sql).
+    default: v2
+  lakebase_project:
+    description: Lakebase autoscaling project id (databricks postgres create-project <id>).
+    default: genie-control-tower
+  lakebase_endpoint:
+    description: Read-write compute endpoint of the project's production branch.
+    default: projects/${var.lakebase_project}/branches/production/endpoints/primary
+  brief_prompt_version:
+    description: Prompt version for the case briefs (see ai/case_brief.sql).
+    default: v4
+  persona_cro:
+    description: Application id of the service principal standing in for the Chief Risk Officer.
+  persona_collections_head:
+    description: Application id of the service principal standing in for the Head of Collections.
+  persona_grievance_officer:
+    description: Application id of the service principal standing in for a grievance officer.
+  persona_auditor:
+    description: Application id of the service principal standing in for an internal auditor.
+
 targets:
   # `databricks bundle deploy -t dev` uses the host from your CLI profile, so there is no workspace URL
   # committed here. Pass --profile, or set DATABRICKS_HOST.
+  # Not `mode: development`: that mode pauses every trigger and refuses to unpause them, and the
+  # file-arrival trigger on the landing volume is how a new month of data runs the whole cycle.
   dev:
-    mode: development
     default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
   prod:
     mode: production
@@ -148,160 +193,3 @@ targets:
     #   host: https://<your-workspace-host>
     # run_as:
     #   service_principal_name: <application-id>
-resources:
-  apps:
-    control_tower:
-      name: ${var.app_name}
-      description: >-
-        Genie Control Tower — three governed Genie Agents (Collections, Grievance, RM) under a
-        supervisor, with a human-approved action plane, RBI conduct guardrails, MLflow tracing and
-        an embedded governance dashboard. All data is synthetic.
-      source_code_path: ./app
-
-      # Runtime config, generated from the variables above. This OVERRIDES app/app.yaml — see the header.
-      config:
-        command: ["uvicorn", "main:app", "--app-dir", "backend", "--host", "0.0.0.0",
-                  "--port", "$DATABRICKS_APP_PORT"]
-        env:
-          - name: CT_CATALOG
-            value: ${var.uc_catalog}
-          - name: CT_SCHEMA
-            value: ${var.uc_schema}
-          - name: CT_VOLUME
-            value: ${var.uc_volume}
-          - name: DATABRICKS_WAREHOUSE_ID
-            value: ${var.warehouse_id}
-          - name: DATABRICKS_CHAT_ENDPOINT
-            value: ${var.chat_endpoint}
-          - name: LAKEBASE_INSTANCE
-            value: ${var.lakebase_instance}
-          - name: LAKEBASE_DBNAME
-            value: databricks_postgres
-          - name: LAKEBASE_SCHEMA
-            value: ${var.lakebase_schema}
-          - name: COLLECTIONS_SPACE_ID
-            value: ${var.collections_space_id}
-          - name: GRIEVANCE_SPACE_ID
-            value: ${var.grievance_space_id}
-          - name: RM_SPACE_ID
-            value: ${var.rm_space_id}
-          - name: DASHBOARD_ID
-            value: ${var.dashboard_id}
-          - name: VS_ENDPOINT
-            value: ${var.vs_endpoint}
-          - name: VS_INDEX
-            value: ${var.vs_index}
-          # TRUE in a deployed app: a request arriving WITHOUT a forwarded user token is refused rather
-          # than served as the service principal. That fallback is a privilege escalation — it reads the
-          # whole book for a user entitled to one region, and produces a plausible answer rather than an
-          # error, which makes it the worst kind of failure. Only set false for local development.
-          - name: REQUIRE_OBO
-            value: "true"
-          - name: MLFLOW_EXPERIMENT
-            value: ${var.mlflow_experiment}
-          # Belt and braces alongside the explicit set_tracking_uri in tracing.py: without these the
-          # Apps container resolves MLflow to a local SQLite file and tracing disables itself silently.
-          - name: MLFLOW_TRACKING_URI
-            value: databricks
-          - name: MLFLOW_REGISTRY_URI
-            value: databricks-uc
-          - name: TRACING_ENABLED
-            value: "true"
-          # External systems the action plane acts on. Calls route through the Unity Catalog HTTP
-          # connection named here, so every outbound bank action is catalog-governed and appears in
-          # lineage; the URL is only used by the direct-POST fallback. Both blank is a valid install —
-          # actions are then recorded and approved without an outbound call.
-          - name: CT_HTTP_CONNECTION
-            value: ${var.http_connection}
-          - name: CT_MOCK_SYSTEMS_URL
-            value: ${var.mock_systems_url}
-          # Appears on generated customer correspondence — see app/.env.example.
-          - name: BANK_NAME
-            value: ${var.bank_name}
-          - name: GROUP_PREFIX
-            value: ${var.group_prefix}
-          - name: PSEUDONYM_SALT
-            value: ${var.pseudonym_salt}
-
-      # Scopes the app requests on the SIGNED-IN USER's behalf (OBO). Least privilege on purpose:
-      #   genie                 — ask the three Genie Agents as the user, so UC row filters apply
-      #   sql:restricted-query  — READ-ONLY SQL. The user token cannot write, by construction.
-      #                           Every write goes through the approval plane under a separate
-      #                           identity, so "the agent did it" is never an accepted answer.
-      #   files                 — read the UC Volume (statements, RBI circulars) as the user
-      # NOT `iam.current-user:read`: the Apps API rejects it as invalid, and the app never needed it —
-      # the caller's identity arrives in the X-Forwarded-Email header, so nothing has to be looked up.
-      # This line was corrected on the live app long before it was corrected here, and the mismatch went
-      # unnoticed because `bundle deploy` was hanging on a 419MB node_modules upload and never reached
-      # the app step to fail. Fixing the sync excludes is what surfaced it.
-      # If Genie result-fetching ever needs full `sql`, widen this ONE line and redeploy — do not
-      # widen it pre-emptively.
-      user_api_scopes:
-        - genie
-        - sql:restricted-query
-        - files
-
-      resources:
-        - name: sql_warehouse
-          description: Serverless warehouse for governed reads and guardrail verification.
-          sql_warehouse:
-            id: ${var.warehouse_id}
-            permission: CAN_USE
-
-        - name: chat_endpoint
-          description: LLM used by the supervisor router and answer fuser.
-          serving_endpoint:
-            # Must follow the variable the app is actually told to call. These disagreed: the runtime got
-            # ${var.chat_endpoint} while the grant was hardcoded, so changing the model produced an app
-            # that was configured for one endpoint and permitted on another.
-            name: ${var.chat_endpoint}
-            permission: CAN_QUERY
-
-        - name: genie_collections
-          description: Collections & Recovery Genie Agent.
-          genie_space:
-            name: Collections & Recovery
-            space_id: ${var.collections_space_id}
-            permission: CAN_RUN
-
-        - name: genie_grievance
-          description: Service & Grievance Genie Agent.
-          genie_space:
-            name: Service & Grievance
-            space_id: ${var.grievance_space_id}
-            permission: CAN_RUN
-
-        - name: genie_rm
-          description: RM Performance & Incentives Genie Agent.
-          genie_space:
-            name: RM Performance & Incentives
-            space_id: ${var.rm_space_id}
-            permission: CAN_RUN
-
-        - name: lakebase
-          description: Approval state machine, action lineage and session memory.
-          database:
-            instance_name: ${var.lakebase_instance}
-            database_name: databricks_postgres
-            permission: CAN_CONNECT_AND_CREATE
-
-        # The action tools are UC FUNCTIONS, not generated SQL: granting EXECUTE on the functions
-        # (rather than write access on the tables) is what keeps the Genie run-as identity SELECT-only
-        # while the app can still act. `uc_securable` has no SCHEMA level — valid types are
-        # CONNECTION / FUNCTION / TABLE / VOLUME — so each function and the docs volume are declared
-        # individually below as they are created.
-        # The guardrail engine reads the governed tables AS THE SERVICE PRINCIPAL, and the action
-        # connectors call UC functions. Without SELECT on the schema and EXECUTE on the control
-        # functions, a fresh install deploys an app whose controls cannot see the evidence they exist to
-        # check — which fails closed, but only after wasting an afternoon.
-        #
-        # NOTE: `uc_securable` has no SCHEMA level (CONNECTION / FUNCTION / TABLE / VOLUME only), so
-        # schema-wide SELECT and the unrestricted `region_entitlement` row for the SP are granted by
-        # scripts/grant_app_sp.py after the app exists and its service principal id is known.
-
-        - name: docs_volume
-          description: Customer statements, RBI circulars and generated outbound documents.
-          uc_securable:
-            securable_full_name: ${var.uc_catalog}.${var.uc_schema}.${var.uc_volume}
-            securable_type: VOLUME
-            permission: READ_VOLUME

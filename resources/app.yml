@@ -1,0 +1,154 @@
+# The Databricks App. See databricks.yml for the variables.
+resources:
+  apps:
+    ct_app:
+      name: ${var.app_name}
+      description: >-
+        Genie Control Tower — three governed Genie Agents (Collections, Grievance, RM) under a
+        supervisor, with a human-approved action plane, RBI conduct guardrails, MLflow tracing and
+        an embedded governance dashboard. All data is synthetic.
+      source_code_path: ../app
+
+      # Runtime config, generated from the variables above. This OVERRIDES app/app.yaml — see the header.
+      config:
+        command: ["uvicorn", "main:app", "--app-dir", "backend", "--host", "0.0.0.0",
+                  "--port", "$DATABRICKS_APP_PORT"]
+        env:
+          - name: CT_CATALOG
+            value: ${var.uc_catalog}
+          - name: CT_SCHEMA
+            value: ${var.uc_schema}
+          - name: CT_VOLUME
+            value: ${var.uc_volume}
+          - name: DATABRICKS_WAREHOUSE_ID
+            value: ${var.warehouse_id}
+          - name: DATABRICKS_CHAT_ENDPOINT
+            value: ${var.chat_endpoint}
+          - name: LAKEBASE_ENDPOINT
+            value: ${var.lakebase_endpoint}
+          - name: LAKEBASE_DBNAME
+            value: databricks_postgres
+          - name: LAKEBASE_SCHEMA
+            value: ${var.lakebase_schema}
+          - name: COLLECTIONS_SPACE_ID
+            value: ${resources.genie_spaces.collections.id}
+          - name: GRIEVANCE_SPACE_ID
+            value: ${resources.genie_spaces.grievance.id}
+          - name: RM_SPACE_ID
+            value: ${resources.genie_spaces.rm.id}
+          - name: DASHBOARD_ID
+            value: ${resources.dashboards.ct_dashboard.id}
+          # TRUE in a deployed app: a request arriving WITHOUT a forwarded user token is refused rather
+          # than served as the service principal. That fallback is a privilege escalation — it reads the
+          # whole book for a user entitled to one region, and produces a plausible answer rather than an
+          # error, which makes it the worst kind of failure. Only set false for local development.
+          - name: REQUIRE_OBO
+            value: "true"
+          - name: MLFLOW_EXPERIMENT
+            value: ${var.mlflow_experiment}
+          # Belt and braces alongside the explicit set_tracking_uri in tracing.py: without these the
+          # Apps container resolves MLflow to a local SQLite file and tracing disables itself silently.
+          - name: MLFLOW_TRACKING_URI
+            value: databricks
+          - name: MLFLOW_REGISTRY_URI
+            value: databricks-uc
+          - name: TRACING_ENABLED
+            value: "true"
+          # External systems the action plane acts on. Calls route through the Unity Catalog HTTP
+          # connection named here, so every outbound bank action is catalog-governed and appears in
+          # lineage; the URL is only used by the direct-POST fallback. Both blank is a valid install —
+          # actions are then recorded and approved without an outbound call. Optional settings that are
+          # off in this build (vector search, the mock-systems URL) are omitted rather than set blank:
+          # Apps rejects an environment variable with an empty value.
+          - name: CT_HTTP_CONNECTION
+            value: ${var.http_connection}
+          # Appears on generated customer correspondence — see app/.env.example.
+          - name: BANK_NAME
+            value: ${var.bank_name}
+          - name: GROUP_PREFIX
+            value: ${var.group_prefix}
+          - name: PSEUDONYM_SALT
+            value: ${var.pseudonym_salt}
+
+      # Scopes the app requests on the SIGNED-IN USER's behalf (OBO). Least privilege on purpose:
+      #   genie                 — ask the three Genie Agents as the user, so UC row filters apply
+      #   sql:restricted-query  — READ-ONLY SQL. The user token cannot write, by construction.
+      #                           Every write goes through the approval plane under a separate
+      #                           identity, so "the agent did it" is never an accepted answer.
+      #   files                 — read the UC Volume (statements, RBI circulars) as the user
+      # NOT `iam.current-user:read`: the Apps API rejects it as invalid, and the app never needed it —
+      # the caller's identity arrives in the X-Forwarded-Email header, so nothing has to be looked up.
+      # This line was corrected on the live app long before it was corrected here, and the mismatch went
+      # unnoticed because `bundle deploy` was hanging on a 419MB node_modules upload and never reached
+      # the app step to fail. Fixing the sync excludes is what surfaced it.
+      # If Genie result-fetching ever needs full `sql`, widen this ONE line and redeploy — do not
+      # widen it pre-emptively.
+      user_api_scopes:
+        - genie
+        - sql:restricted-query
+        - files
+
+      resources:
+        - name: sql_warehouse
+          description: Serverless warehouse for governed reads and guardrail verification.
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+
+        - name: chat_endpoint
+          description: LLM used by the supervisor router and answer fuser.
+          serving_endpoint:
+            # Must follow the variable the app is actually told to call. These disagreed: the runtime got
+            # ${var.chat_endpoint} while the grant was hardcoded, so changing the model produced an app
+            # that was configured for one endpoint and permitted on another.
+            name: ${var.chat_endpoint}
+            permission: CAN_QUERY
+
+        - name: genie_collections
+          description: Collections & Recovery Genie Agent.
+          genie_space:
+            name: Collections & Recovery
+            space_id: ${resources.genie_spaces.collections.id}
+            permission: CAN_RUN
+
+        - name: genie_grievance
+          description: Service & Grievance Genie Agent.
+          genie_space:
+            name: Service & Grievance
+            space_id: ${resources.genie_spaces.grievance.id}
+            permission: CAN_RUN
+
+        - name: genie_rm
+          description: RM Performance & Incentives Genie Agent.
+          genie_space:
+            name: RM Performance & Incentives
+            space_id: ${resources.genie_spaces.rm.id}
+            permission: CAN_RUN
+
+        - name: lakebase
+          description: The collections case queue, the approval state machine, action lineage and session memory.
+          postgres:
+            branch: projects/${var.lakebase_project}/branches/production
+            database: projects/${var.lakebase_project}/branches/production/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE
+
+        # The action tools are UC FUNCTIONS, not generated SQL: granting EXECUTE on the functions
+        # (rather than write access on the tables) is what keeps the Genie run-as identity SELECT-only
+        # while the app can still act. `uc_securable` has no SCHEMA level — valid types are
+        # CONNECTION / FUNCTION / TABLE / VOLUME — so each function and the docs volume are declared
+        # individually below as they are created.
+        # The guardrail engine reads the governed tables AS THE SERVICE PRINCIPAL, and the action
+        # connectors call UC functions. Without SELECT on the schema and EXECUTE on the control
+        # functions, a fresh install deploys an app whose controls cannot see the evidence they exist to
+        # check — which fails closed, but only after wasting an afternoon.
+        #
+        # NOTE: `uc_securable` has no SCHEMA level (CONNECTION / FUNCTION / TABLE / VOLUME only), so
+        # schema-wide SELECT and the unrestricted `entitlements` row for the SP are granted by
+        # scripts/grant_app_sp.py after the app exists and its service principal id is known.
+
+        - name: docs_volume
+          description: Customer statements, RBI circulars and generated outbound documents.
+          uc_securable:
+            securable_full_name: ${var.uc_catalog}.${var.uc_schema}.${var.uc_volume}
+            securable_type: VOLUME
+            permission: READ_VOLUME

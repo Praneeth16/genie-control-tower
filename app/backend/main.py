@@ -28,6 +28,7 @@ import governance
 import identity
 import voice
 from actions_api import build_actions_router
+from cases_api import build_cases_router
 
 log = logging.getLogger("control-tower")
 
@@ -48,6 +49,8 @@ app = FastAPI(title="Genie Control Tower")
 
 # Act -> Approve -> Execute routes.
 app.include_router(build_actions_router(AGENT_NAME))
+# The case queue (Lakebase) and the CRO overview (gold).
+app.include_router(build_cases_router())
 
 # CORS for the Vite dev server during local frontend work. Apps serves the built bundle from this
 # same origin, so this is a development-only allowance.
@@ -88,7 +91,7 @@ def health(request: Request):
         "schema": config.SCHEMA,
         "warehouse_id": config.WAREHOUSE_ID,
         "genie_agents": {d: bool(sid) for d, sid in config.SPACE_IDS.items()},
-        "lakebase": f"{config.LAKEBASE_INSTANCE}/{config.LAKEBASE_SCHEMA}",
+        "lakebase": f"{config.LAKEBASE_ENDPOINT}/{config.LAKEBASE_SCHEMA}",
         "data_is_synthetic": config.DATA_IS_SYNTHETIC,
         "require_obo": config.REQUIRE_OBO,
         "turn_budget_seconds": config.TURN_BUDGET_SECONDS,
@@ -164,7 +167,9 @@ def governance_audit(request: Request, hours: int = 48, limit: int = 60):
 
 
 @app.get("/api/governance/controls")
-def governance_controls():
+def governance_controls(request: Request):
+    # ADMIN ONLY: it lists the approver directory, which is who can sign off what.
+    authz.require_admin(request)
     try:
         return governance.controls()
     except Exception as e:

@@ -1,112 +1,80 @@
 """Apply the Lakebase (Postgres) migrations for the control tower.
 
-    python3 scripts/lakebase_migrate.py               # apply every lakebase/*.sql in order
-    python3 scripts/lakebase_migrate.py --check       # connect + report current state only
+    python3 scripts/lakebase_migrate.py --endpoint projects/<p>/branches/production/endpoints/primary \\
+        --schema control_tower [--profile <cli-profile>] [--root .]
+    ... --check        connect and report current state only
 
-Auth: a short-lived Lakebase credential minted through the Databricks SDK for the CLI profile's
-identity — there is no stored Postgres password anywhere in this repo.
+Runs locally or as a setup job task. Auth is a short-lived Lakebase credential minted through the
+Databricks SDK for the calling identity; there is no stored Postgres password anywhere in this repo.
+Every migration is idempotent and re-applied in order on each run.
 """
 from __future__ import annotations
 
 import argparse
 import glob
 import os
-import sys
+import re
 
 import psycopg
-from psycopg.rows import dict_row
 from databricks.sdk import WorkspaceClient
-
-# Importing config loads .env, so this script and the app can never disagree about which
-# instance or schema they are using.
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                "app", "backend"))
-import config  # noqa: E402
-
-PROFILE = os.environ.get("DATABRICKS_CONFIG_PROFILE") or None
-INSTANCE = config.LAKEBASE_INSTANCE
-# Whoever runs the install becomes the first Control Tower Administrator and approver. Resolved from the
-# workspace identity rather than written into the SQL, so a fresh install grants the installer and not
-# whoever happened to build this.
-ADMIN_PRINCIPAL = os.environ.get("CT_ADMIN_PRINCIPAL", "")
+from psycopg.rows import dict_row
 
 
-def render(sql: str, admin: str) -> str:
-    """Substitute deployment-specific names into a migration.
-
-    The Postgres schema was written into the SQL as a literal, which meant LAKEBASE_SCHEMA configured the
-    app's search_path while the migration created a different schema entirely — the app would connect
-    successfully and find no tables.
-    """
-    out = sql.replace("${ADMIN_PRINCIPAL}", admin).replace("${LAKEBASE_SCHEMA}", SCHEMA)
-    import re as _re
-    left = _re.findall(r"\$\{[A-Z_]+\}", out)
+def render(sql: str, admin: str, schema: str) -> str:
+    """Substitute deployment-specific names. The Postgres schema used to be a literal in the SQL, so the
+    app's search_path pointed at one schema while the migration created another — it connected fine and
+    found no tables."""
+    out = sql.replace("${ADMIN_PRINCIPAL}", admin).replace("${LAKEBASE_SCHEMA}", schema)
+    left = re.findall(r"\$\{[A-Z_]+\}", out)
     if left:
         raise SystemExit(f"unsubstituted placeholders in migration: {sorted(set(left))}")
     return out
-DBNAME = config.LAKEBASE_DBNAME
-SCHEMA = config.LAKEBASE_SCHEMA
-HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-_admin = ""
-
-
-def connect() -> psycopg.Connection:
-    w = WorkspaceClient(profile=PROFILE) if PROFILE else WorkspaceClient()
-    inst = w.database.get_database_instance(name=INSTANCE)
-    cred = w.database.generate_database_credential(instance_names=[INSTANCE])
+def connect(w: WorkspaceClient, endpoint: str, dbname: str) -> psycopg.Connection:
+    host = w.postgres.get_endpoint(name=endpoint).status.hosts.host
+    cred = w.postgres.generate_database_credential(endpoint=endpoint)
     user = w.current_user.me().user_name
-    print(f"connecting {user} -> {INSTANCE} ({inst.read_write_dns}) db={DBNAME}")
-    return psycopg.connect(
-        host=inst.read_write_dns, port=5432, dbname=DBNAME,
-        user=user, password=cred.token, sslmode="require",
-        autocommit=True, row_factory=dict_row,
-    )
+    print(f"connecting {user} -> {endpoint} ({host}) db={dbname}")
+    return psycopg.connect(host=host, port=5432, dbname=dbname, user=user, password=cred.token,
+                           sslmode="require", autocommit=True, row_factory=dict_row)
 
 
-def report(conn: psycopg.Connection) -> None:
+def report(conn: psycopg.Connection, schema: str) -> None:
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema = %s ORDER BY table_name", (SCHEMA,))
+        cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s "
+                    "ORDER BY table_name", (schema,))
         tables = [r["table_name"] for r in cur.fetchall()]
-        print(f"schema {SCHEMA}: {len(tables)} tables -> {', '.join(tables) or '(none)'}")
-        for t in ("actions", "action_events", "action_policies", "agent_sessions", "runtime_flags"):
-            if t in tables:
-                cur.execute(f"SELECT count(*) AS n FROM {SCHEMA}.{t}")
-                print(f"  {t:18} {cur.fetchone()['n']:>6} rows")
+        print(f"schema {schema}: {len(tables)} tables")
+        for t in tables:
+            cur.execute(f'SELECT count(*) AS n FROM "{schema}"."{t}"')
+            print(f"  {t:22} {cur.fetchone()['n']:>7} rows")
 
 
-def main() -> int:
-    global _admin
-    if not INSTANCE:
-        raise SystemExit("LAKEBASE_INSTANCE is not set — see README 'Configure'.")
-    w = WorkspaceClient(profile=PROFILE) if PROFILE else WorkspaceClient()
-    _admin = ADMIN_PRINCIPAL or w.current_user.me().user_name
-    print(f"admin principal / first approver: {_admin}")
-    ap = argparse.ArgumentParser()
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--endpoint", required=True)
+    ap.add_argument("--schema", default="control_tower")
+    ap.add_argument("--dbname", default="databricks_postgres")
+    ap.add_argument("--profile", default=os.environ.get("DATABRICKS_CONFIG_PROFILE"))
+    # Serverless job tasks exec the file, so __file__ is undefined there; the bundle passes its root.
+    ap.add_argument("--root", default=".")
     ap.add_argument("--check", action="store_true", help="report state without applying migrations")
-    args = ap.parse_args()
+    a = ap.parse_args()
 
-    files = sorted(glob.glob(os.path.join(HERE, "lakebase", "*.sql")))
-    with connect() as conn:
-        if not args.check:
-            for path in files:
-                sql = render(open(path).read(), _admin)
-                print(f"applying {os.path.basename(path)} ...", end=" ", flush=True)
-                try:
-                    # psycopg3 executes a multi-statement script in one call when no params are bound.
-                    with conn.cursor() as cur:
-                        cur.execute(sql)
-                    print("ok")
-                except Exception as e:
-                    print("FAIL")
-                    print(f"  {e}")
-                    return 1
-        report(conn)
-    return 0
+    w = WorkspaceClient(profile=a.profile) if a.profile else WorkspaceClient()
+    # Whoever runs the install becomes the first Control Tower Administrator and approver.
+    admin = w.current_user.me().user_name
+    with connect(w, a.endpoint, a.dbname) as conn:
+        if not a.check:
+            for path in sorted(glob.glob(os.path.join(a.root, "lakebase", "*.sql"))):
+                print(f"applying {os.path.basename(path)}")
+                with conn.cursor() as cur:
+                    # psycopg3 runs a multi-statement script in one call when no parameters are bound.
+                    cur.execute(render(open(path).read(), admin, a.schema))
+        report(conn, a.schema)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Not sys.exit(main()): serverless job tasks report SystemExit(0) as a failure.
+    main()

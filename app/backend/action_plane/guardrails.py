@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import os
 from typing import Any
 
 import databricks_client as dbx
@@ -46,39 +45,28 @@ IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 # identity's visible counts against these: anything lower means a row filter is hiding part of the book
 # from the control.
 #
-# These are LOADED FROM A MANIFEST the data generator writes, not typed in here. They were hand-copied
-# once, and that is a landmine: regenerate or reload the data and the control sees a different number
-# from its hardcoded constant, concludes it is being row-filtered, and FAILS CLOSED — correct behaviour
-# for the check, but the app then refuses all traffic and it presents as a security incident rather than
-# a stale literal. The manifest makes the two impossible to desync.
-#
-# The fallback values are the counts as of the 2026-09-03 rebuild, so a missing manifest degrades to the
-# old behaviour rather than disabling the control — an absent file must never mean "assume unblinded".
-_FALLBACK_VISIBILITY = {
-    "recovery_agents": 60,
-    "complaints": 9660,
-    "delinquency_monthly": 108000,
-    "collections_activity": 63267,
-}
+# The expectation has to be formed independently of any row filter, or it would agree with a filter
+# that is blinding the control. It used to be a manifest the data generator wrote into the app's source
+# tree, with hard-coded fallback counts — which went stale the moment the data was reloaded. It is now
+# gold_row_counts, which the pipeline computes from its private core tables, where no row filter applies,
+# and which carries no row filter itself. Re-read every few minutes, so a pipeline run that changes the
+# book changes the expectation with it.
+_GUARDED_TABLES = ("recovery_agents", "complaints", "delinquency_monthly", "collections_activity")
+_EXPECTED_TTL_SECONDS = 300
+_expected: dict[str, Any] = {"at": 0.0, "counts": None}
 
 
-def _load_expected_visibility() -> tuple[dict[str, int], str]:
-    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "row_counts.json")
-    try:
-        with open(path) as fh:
-            counts = json.load(fh)
-        # Every expected table must be present. A manifest missing a key would otherwise silently drop
-        # that table's check, which is a blinding the blinding-detector cannot see.
-        missing = [k for k in _FALLBACK_VISIBILITY if k not in counts]
+def expected_visibility() -> dict[str, int]:
+    import time
+    if _expected["counts"] is None or time.time() - _expected["at"] > _EXPECTED_TTL_SECONDS:
+        res = dbx.run_sql("SELECT table_name, row_count FROM gold_row_counts")
+        counts = {r["table_name"]: int(r["row_count"]) for r in res["rows"]}
+        missing = [t for t in _GUARDED_TABLES if t not in counts]
         if missing:
-            raise ValueError(f"manifest is missing {missing}")
-        return ({k: int(counts[k]) for k in _FALLBACK_VISIBILITY},
-                f"manifest {os.path.basename(path)}")
-    except Exception:
-        return dict(_FALLBACK_VISIBILITY), "built-in fallback (row_counts.json not found)"
-
-
-EXPECTED_VISIBILITY, EXPECTED_VISIBILITY_SOURCE = _load_expected_visibility()
+            # A missing table would silently drop its check: a blinding the blinding-detector cannot see.
+            raise GuardrailsBlinded(f"gold_row_counts has no expected count for {missing}")
+        _expected.update(at=time.time(), counts={t: counts[t] for t in _GUARDED_TABLES})
+    return _expected["counts"]
 
 
 class GuardrailsBlinded(RuntimeError):
@@ -152,15 +140,16 @@ def assert_not_blinded(w=None) -> dict[str, Any]:
     raw = res["rows"][0]["v"]
     seen = json.loads(raw) if isinstance(raw, str) else dict(raw)
     seen = {k: int(v) for k, v in seen.items()}
-    short = {k: (seen.get(k, 0), n) for k, n in EXPECTED_VISIBILITY.items() if seen.get(k, 0) < n}
+    expected = expected_visibility()
+    short = {k: (seen.get(k, 0), n) for k, n in expected.items() if seen.get(k, 0) < n}
     if short:
         raise GuardrailsBlinded(
             "the guardrail identity is being row-filtered and cannot see the data it must check: "
             + "; ".join(f"{k}: sees {got} of {want}" for k, (got, want) in short.items())
-            + ". Grant it an unrestricted region_entitlement before serving traffic — a blinded "
+            + ". Grant it an unrestricted row in the entitlements table before serving traffic — a blinded "
               "control reports every action compliant.")
-    return {"visible": seen, "expected": EXPECTED_VISIBILITY, "blinded": False,
-            "expected_source": EXPECTED_VISIBILITY_SOURCE}
+    return {"visible": seen, "expected": expected, "blinded": False,
+            "expected_source": "gold_row_counts (computed by the pipeline before any row filter)"}
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +200,15 @@ def authorise_approver(action: dict[str, Any], approver: str) -> tuple[bool, str
     """
     if action.get("requested_by") and action["requested_by"] == approver:
         return False, "separation of duties: you cannot approve an action you requested"
+    return holds_required_role(action, approver)
 
+
+def holds_required_role(action: dict[str, Any], principal: str) -> tuple[bool, str]:
+    """Does `principal` hold the role this action type's policy names? Separation of duties is NOT part of
+    this check, so executing and rejecting can require the role on its own. They used to call
+    authorise_approver and ignore its separation-of-duties refusal, which returned BEFORE the role check:
+    the proposer could therefore execute or reject without holding the role at all."""
+    approver = principal
     policy = _policy(action.get("action_type"))
     if policy is None:
         return False, f"no policy for action_type '{action.get('action_type')}'"

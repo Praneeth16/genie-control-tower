@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en" data-od-deck-protocol="1"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Genie Control Tower · Databricks</title>
+  <style>
+    /* ===========================================================
+       Deck framework — DO NOT EDIT the rules in this <style> block.
+       Edit only inside the second <style> block below (per-deck
+       styles) and inside <section class="slide"> bodies.
+
+       Contract this framework provides:
+         - 1920×1080 fixed canvas, scaled to fit the viewport
+         - Only .slide.active is visible at a time
+         - Programmatic prev/next + counter elements kept outside the scaled
+           stage but hidden by default so the host can render the UI chrome
+         - OD Deck Protocol v1 absolute navigation + slide-state events
+         - Keyboard (← → space PgUp PgDn Home End R), half-slide click, and stored
+           position survive iframe focus quirks
+         - "Save as PDF" produces a multi-page vertical PDF, one slide
+           per page, by toggling every slide visible under @media print
+       =========================================================== */
+    :root {
+      /* SLOT: theme tokens — Databricks palette only. */
+      --bg: #f9f7f4;
+      --fg: #1b3139;
+      --muted: #1b5162;
+      --accent: #ff3621;
+      --surface: #ffffff;
+      --shell: #1b3139;
+      --navy: #1b3139;
+      --teal: #1b5162;
+      --lava: #ff3621;
+      --oat: #f9f7f4;
+      --white: #ffffff;
+      --line: #dce0e2;
+      --green: #00a972;
+      --radius: 8px;
+      --font-sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --pad-x: 120px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--shell);
+      color: var(--fg);
+      font: 18px/1.5 -apple-system, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .deck-shell {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+    .deck-stage {
+      width: 1920px;
+      height: 1080px;
+      background: var(--bg);
+      position: relative;
+      transform-origin: top left;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+    }
+    .slide {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+    /* Visibility toggle hardened with :not(.active) + !important so cascade
+       order can't break it. The previous `.slide { display:none }` rule
+       lost the cascade whenever a per-slide variant class (e.g.
+       `.s-cold { display:grid }`) was declared after it on the same
+       element — every slide silently became visible at once. The
+       `!important` is a belt-and-suspenders against agent code that adds
+       `!important` on variant classes too. */
+    .slide:not(.active) { display: none !important; }
+    /* The active default uses :where() so it has zero specificity. Per-slide
+       variant classes like `.s-cold { display:grid }` or
+       `.s-magazine { display:block }` can override the default flex layout
+       just by declaring `display` — no need for the variant to be more
+       specific. The hide rule above still wins for inactive slides. */
+    :where(.slide.active) { display: flex; flex-direction: column; }
+
+    /* Programmatic chrome — counter + prev/next live outside the scaled
+       stage so the host bridge can read/update them, but they stay hidden
+       in preview, presentation, fullscreen, and new-tab modes. */
+    .deck-counter {
+      position: fixed;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 4px;
+      background: rgba(10, 14, 26, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 0.18em;
+      z-index: 1000;
+    }
+    .deck-counter button {
+      width: 36px; height: 36px;
+      background: transparent;
+      color: #fff;
+      border: 0;
+      border-radius: 50%;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: background 0.15s;
+    }
+    .deck-counter button:hover { background: rgba(255, 255, 255, 0.12); }
+    .deck-counter button[disabled] { opacity: 0.3; cursor: default; }
+    .deck-counter .deck-count {
+      padding: 0 14px;
+      letter-spacing: 0.22em;
+    }
+    .deck-counter .deck-count .total { color: rgba(255, 255, 255, 0.5); }
+    .deck-hint {
+      position: fixed;
+      bottom: 26px;
+      right: 28px;
+      color: rgba(255, 255, 255, 0.4);
+      font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      z-index: 999;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* Print / PDF stitching — every slide stacks top-to-bottom, one per
+       page. The viewer's "Share → PDF" relies on this; do not remove. */
+    @media print {
+      @page { size: 1920px 1080px; margin: 0; }
+      html, body {
+        width: 1920px !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: #fff !important;
+      }
+      .deck-shell {
+        position: static !important;
+        display: block !important;
+        inset: auto !important;
+      }
+      .deck-stage {
+        width: 1920px !important;
+        height: auto !important;
+        transform: none !important;
+        box-shadow: none !important;
+        position: static !important;
+      }
+      .slide {
+        display: flex !important;
+        position: relative !important;
+        inset: auto !important;
+        width: 1920px !important;
+        height: 1080px !important;
+        page-break-after: always;
+        break-after: page;
+      }
+      .slide:last-child { page-break-after: auto; break-after: auto; }
+      .deck-counter, .deck-hint { display: none !important; }
+    }
+  </style>
+<style>
+    /* SLOT: per-deck styles — Databricks editorial system. */
+    @font-face { font-family: 'DM Sans'; src: url('assets/fonts/dm-sans-regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: 'DM Sans'; src: url('assets/fonts/dm-sans-medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+    @font-face { font-family: 'DM Sans'; src: url('assets/fonts/dm-sans-bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+    @font-face { font-family: 'DM Mono'; src: url('assets/fonts/dm-mono-regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: 'DM Mono'; src: url('assets/fonts/dm-mono-medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+
+    .slide { font-family: var(--font-sans); color: var(--navy); }
+    .hl { color: var(--lava); }
+    .mono { font-family: var(--font-mono); }
+
+    /* ---------- content slide scaffold: header / body / footer in flow ---------- */
+    .s-content {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      row-gap: 40px;
+      padding: 64px var(--pad-x) 48px;
+      background: var(--oat);
+    }
+    .s-content.on-white { background: var(--white); }
+    .head { display: flex; flex-direction: column; gap: 16px; }
+    .eyebrow {
+      display: flex; align-items: center; gap: 16px;
+      font: 500 20px/1 var(--font-mono);
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--navy);
+    }
+    .eyebrow::before {
+      content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--lava); flex: none;
+    }
+    .h2 {
+      font-weight: 500; font-size: 56px; line-height: 1.1; letter-spacing: -0.02em;
+      max-width: 1600px; color: var(--navy);
+    }
+    .sub {
+      font-size: 30px; line-height: 1.35; color: var(--teal); max-width: 1600px;
+    }
+    .body { min-height: 0; display: flex; flex-direction: column; justify-content: center; padding-top: 24px; }
+    .foot {
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--line); padding-top: 20px;
+    }
+    .foot img { display: block; height: 24px; width: auto; aspect-ratio: 713 / 113; }
+    .foot .meta {
+      font: 400 16px/1 var(--font-mono); letter-spacing: 0.04em; color: var(--teal);
+      display: flex; gap: 24px;
+    }
+
+    /* ---------- shared components ---------- */
+    .card {
+      background: var(--white); border: 1px solid var(--line); border-radius: var(--radius);
+    }
+    .shot {
+      background: var(--white); border: 1px solid var(--line); border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .shot img { display: block; width: 100%; height: auto; }
+    .caption {
+      font: 400 18px/1.4 var(--font-mono); letter-spacing: 0.02em; color: var(--teal);
+    }
+    .lead { font-size: 28px; line-height: 1.5; color: var(--navy); max-width: 62ch; }
+
+    /* ---------- 01 cover / 10 closing ---------- */
+    .s-cover {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 96px var(--pad-x) 80px;
+      background: var(--navy); color: var(--white);
+    }
+    .s-cover .kicker {
+      font: 500 22px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--white);
+      display: flex; align-items: center; gap: 16px;
+    }
+    .s-cover .kicker::before { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--lava); }
+    .s-cover .center { align-self: center; display: flex; flex-direction: column; gap: 40px; }
+    .s-cover h1 {
+      font-weight: 500; font-size: 132px; line-height: 1.02; letter-spacing: -0.03em; color: var(--white);
+      max-width: 1400px;
+    }
+    .s-cover .deck-sub { font-size: 36px; line-height: 1.4; color: var(--white); max-width: 40ch; }
+    .s-cover .bottom {
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--teal); padding-top: 28px;
+    }
+    .s-cover .bottom img { display: block; height: 36px; width: auto; aspect-ratio: 713 / 113; }
+    .s-cover .bottom .meta { font: 400 18px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--white); }
+
+    
+    /* ---------- this deck ---------- */
+    /* Print every slide. The framework's print rule (.slide, display flex) loses to its own hide rule
+       (.slide:not(.active), display none) on specificity, so only the active slide printed. Both slide
+       types here are grids, so print restores the grid rather than the framework's flex default. */
+    @media print { .slide.s-content:not(.active), .slide.s-cover:not(.active) { display: grid !important; } }
+    .s-cover h1 { font-size: 104px; }
+    .s-cover .note { font: 400 20px/1.4 var(--font-mono); color: var(--white); opacity: .85; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; }
+    .stat { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 36px 32px; display: flex; flex-direction: column; gap: 14px; }
+    .stat .v { font: 500 64px/1 var(--font-sans); white-space: nowrap; letter-spacing: -0.02em; color: var(--navy); }
+    .stat .v small { font-size: 36px; }
+    .stat .k { font-size: 24px; line-height: 1.35; color: var(--teal); }
+    .ask { margin-top: 40px; background: var(--navy); color: var(--white); border-radius: var(--radius); padding: 28px 36px; font-size: 30px; display: flex; gap: 20px; align-items: center; }
+    .ask b { color: var(--lava); font-weight: 700; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+    .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; align-items: stretch; }
+    .cols4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; align-items: stretch; }
+    .panel { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 36px; display: flex; flex-direction: column; gap: 18px; }
+    .panel h3 { font: 700 30px/1.2 var(--font-sans); color: var(--navy); }
+    .panel .tag { font: 500 18px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--lava); }
+    .panel ul { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+    .panel li { font-size: 25px; line-height: 1.4; padding-left: 28px; position: relative; }
+    .panel li::before { content: ''; position: absolute; left: 0; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--lava); }
+    .panel.dark { background: var(--navy); color: var(--white); border-color: var(--navy); }
+    .panel.dark h3 { color: var(--white); }
+    .bigline { font: 500 64px/1 var(--font-sans); color: var(--lava); letter-spacing: -0.02em; }
+    .flow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 14px; align-items: stretch; }
+    .step { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 18px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+    .step img { width: 56px; height: 56px; }
+    .step .n { font: 500 16px/1 var(--font-mono); color: var(--lava); letter-spacing: .06em; }
+    .step h4 { font: 700 24px/1.2 var(--font-sans); }
+    .step p { font-size: 19px; line-height: 1.4; color: var(--teal); }
+    .runner { margin-top: 26px; display: flex; align-items: center; gap: 18px; font-size: 24px; color: var(--teal); }
+    .runner img { width: 44px; height: 44px; }
+    table.t { width: 100%; border-collapse: collapse; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+    table.t th { text-align: left; font: 500 18px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--teal); padding: 20px 24px; border-bottom: 1px solid var(--line); }
+    table.t td { font-size: 24px; line-height: 1.35; padding: 20px 24px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.t tr:last-child td { border-bottom: 0; }
+    table.t td.v { font-weight: 700; color: var(--navy); white-space: nowrap; }
+    .demo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; }
+    .demo .panel .who { font: 500 18px/1 var(--font-mono); color: var(--teal); text-transform: uppercase; letter-spacing: .06em; }
+    .plat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+    .plat .panel { flex-direction: row; gap: 20px; align-items: flex-start; padding: 28px; }
+    .plat img { width: 60px; height: 60px; flex: none; }
+    .plat h3 { font-size: 26px; }
+    .plat p { font-size: 21px; line-height: 1.4; color: var(--teal); margin-top: 6px; }
+
+  </style>
+</head>
+<body>
+  <div class="deck-shell">
+    <div class="deck-stage" id="deck-stage">
+
+      <section class="slide active s-cover" data-screen-label="01 Title">
+        <div class="kicker">Retail banking · Collections and recovery</div>
+        <div class="center">
+          <h1>Work the right accounts first, and never contact a borrower you <span class="hl">must not</span></h1>
+          <p class="deck-sub">A governed collections worklist for the Chief Risk Officer and the Head of Collections</p>
+          <p class="note">All data is synthetic. The bank, its customers and its staff are invented.</p>
+        </div>
+        <div class="bottom">
+          <img src="assets/brand/databricks-logo-white.svg" alt="Databricks">
+          <span class="meta">FE Bar · Field Engineering</span>
+        </div>
+      </section>
+      <section class="slide s-content" data-screen-label="02 Answer">
+        <header class="head">
+          <div class="eyebrow">The answer up front</div>
+          <h2 class="h2">One worklist ranks <span class="hl">589</span> delinquent accounts and holds the ones the rules say to leave alone</h2>
+          
+        </header>
+        <div class="body"><div class="stats">
+      <div class="stat"><div class="v">INR 44.1<small> crore</small></div><div class="k">outstanding on 589 delinquent accounts, ranked with the reasons on every row</div></div>
+      <div class="stat"><div class="v">40</div><div class="k">accounts held from contact because the borrower's grievance is still open</div></div>
+      <div class="stat"><div class="v">2,499</div><div class="k">contacts outside 08:00 to 19:00 IST found, 4.0% of all contacts</div></div>
+      <div class="stat"><div class="v">176<small> / 177</small></div><div class="k">source files reconciled to what the sender declared, and the short one is flagged</div></div>
+    </div>
+    <div class="ask"><b>The ask</b> A 6-week pilot in the West and Central collections regions.</div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>02</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="03 Problem">
+        <header class="head">
+          <div class="eyebrow">The problem and why now</div>
+          <h2 class="h2">Two books spiked this year, and some of the collection pressure <span class="hl">breaks the RBI contact rules</span></h2>
+          
+        </header>
+        <div class="body"><div class="cols">
+      <div class="panel"><div class="tag">What is happening</div>
+        <ul><li>Microfinance delinquency in Solapur reached 43.6% in May 2026, against about 9% for the rest of the book.</li><li>Commercial vehicle delinquency in Indore reached 26.0% in the same month. By August both had eased, to 17.8% and 16.1%, still about twice the rest of the book.</li><li>Managers build the worklist by hand from several systems, so nobody knows which accounts to work first.</li><li>A file can arrive short and nobody notices. The dialer's June file arrived 37 rows short.</li></ul></div>
+      <div class="panel dark"><div class="tag">Why now</div>
+        <ul><li>The RBI's August 2022 circular on recovery agents forbids contact before 08:00 or after 19:00. The lender answers for its agencies.</li><li>Under the RBI Integrated Ombudsman Scheme, 2021, a borrower can take an unresolved complaint about recovery agents to the Ombudsman.</li><li>Stress raises collection pressure exactly where conduct breaches are most likely.</li></ul></div>
+    </div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>03</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="04 Today vs tomorrow">
+        <header class="head">
+          <div class="eyebrow">Today against tomorrow</div>
+          <h2 class="h2">From hand-built lists and late surprises to <span class="hl">one list rebuilt every time data lands</span></h2>
+          
+        </header>
+        <div class="body"><div class="cols">
+      <div class="panel"><div class="tag">Today</div><h3>Found after the complaint</h3>
+        <ul><li>Each manager builds a list from the dialer, the field app, the loan system and the CRM.</li><li>A short or missing file lowers a report, and nobody can see why.</li><li>A conduct breach is found when the borrower complains.</li><li>Every action depends on whoever happens to check it.</li></ul></div>
+      <div class="panel dark"><div class="tag">Tomorrow</div><h3>Applied before contact</h3>
+        <ul><li>One worklist, ranked by a score whose reasons are stored on every row.</li><li>Every file is checked against what the sender declared, on the day it lands.</li><li>Accounts with an open grievance are held, and accounts with conduct flags are recommended for a certified agency.</li><li>Every action needs a named approver, and the bank's controls can refuse it.</li></ul></div>
+    </div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>04</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="05 How it works">
+        <header class="head">
+          <div class="eyebrow">How it works</div>
+          <h2 class="h2">One job runs the whole flow <span class="hl">when a month of data lands</span></h2>
+          
+        </header>
+        <div class="body"><div class="flow"><div class="step"><img src="assets/icons/lakeflow.svg" alt=""><div class="n">01</div><h4>Lakeflow</h4><p>18 source feeds and the letters read as they land, checked and reconciled</p></div><div class="step"><img src="assets/icons/unity-catalog.svg" alt=""><div class="n">02</div><h4>Unity Catalog</h4><p>row filters and masks on every published table</p></div><div class="step"><img src="assets/icons/mosaic-ai.svg" alt=""><div class="n">03</div><h4>AI in the flow</h4><p>letters triaged by ai_query; worklist scored and briefed</p></div><div class="step"><img src="assets/icons/lakebase.svg" alt=""><div class="n">04</div><h4>Lakebase</h4><p>the case queue officers work, with a locked history</p></div><div class="step"><img src="assets/icons/genie.svg" alt=""><div class="n">05</div><h4>Genie</h4><p>three governed agents answer as the signed-in user</p></div><div class="step"><img src="assets/icons/apps.svg" alt=""><div class="n">06</div><h4>Databricks App</h4><p>overview, worklist, case and approvals</p></div><div class="step"><img src="assets/icons/ai-bi-dashboards.svg" alt=""><div class="n">07</div><h4>MLflow judges</h4><p>a different model family checks the worklist briefs</p></div></div>
+      <div class="runner"><img src="assets/icons/lakeflow-jobs.svg" alt=""> Lakeflow Jobs starts the cycle when a source system's manifest arrives, and runs every stage in order.</div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>05</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="06 Demo">
+        <header class="head">
+          <div class="eyebrow">What you are about to see</div>
+          <h2 class="h2">Four stops, each tied to a decision <span class="hl">one of you makes</span></h2>
+          
+        </header>
+        <div class="body"><div class="demo"><div class="panel"><div class="who">CRO</div><h3>The overview</h3><p style="font-size:24px;line-height:1.4;color:var(--teal)">Gross NPA, conduct exposure in one number, and whether the data behind it is complete.</p></div><div class="panel"><div class="who">Head of Collections</div><h3>The worklist</h3><p style="font-size:24px;line-height:1.4;color:var(--teal)">The accounts to work first, the reasons in words, and the ones on hold.</p></div><div class="panel"><div class="who">Collections officer</div><h3>One case</h3><p style="font-size:24px;line-height:1.4;color:var(--teal)">Update the case, propose an allocation, see the control refuse an uncertified agent.</p></div><div class="panel"><div class="who">Either leader</div><h3>Ask Genie</h3><p style="font-size:24px;line-height:1.4;color:var(--teal)">A plain-language question, answered with only the rows that person may see.</p></div></div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>06</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="07 Value by leader">
+        <header class="head">
+          <div class="eyebrow">What each leader gets</div>
+          <h2 class="h2">Each leader gets the measures they are <span class="hl">already judged on</span></h2>
+          
+        </header>
+        <div class="body"><div class="cols">
+      <div class="panel"><div class="tag">Chief Risk Officer</div>
+        <div class="bigline">2.95% GNPA</div>
+        <ul><li>Down from 3.51% the month before, read from the governed tables.</li><li>Conduct exposure in one number: 2,499 contacts outside the permitted hours.</li><li>Completeness of the data behind every number, file by file.</li></ul></div>
+      <div class="panel"><div class="tag">Head of Collections and Recovery</div>
+        <div class="bigline">9.1% roll-forward</div>
+        <ul><li>The order to work the book, with the score's reasons on every account.</li><li>40 accounts held for an open grievance; 113 recommended for reassignment to a certified agency.</li><li>Officers' notes and statuses survive every refresh.</li></ul></div>
+    </div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>07</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="08 Value case">
+        <header class="head">
+          <div class="eyebrow">The value case</div>
+          <h2 class="h2">Four value drivers, each with an assumption <span class="hl">you can replace</span></h2>
+          
+        </header>
+        <div class="body"><table class="t">
+      <tr><th>Value driver</th><th>From the data</th><th>Assumption</th><th>Illustrative value</th></tr>
+      <tr><td>Better recovery on the worked book</td><td>INR 44.1 crore on the worklist</td><td>Cure on the list rises by 1 percentage point</td><td class="v">INR 44 lakh a year</td></tr>
+      <tr><td>Fewer conduct breaches</td><td>2,499 contacts outside 08:00 to 19:00</td><td>The reassignment rule removes half of them</td><td class="v">About 1,250 fewer</td></tr>
+      <tr><td>No contact while a grievance is open</td><td>40 accounts held today</td><td>Each is one less likely Ombudsman escalation</td><td class="v">40 fewer at-risk cases a month</td></tr>
+      <tr><td>Analyst time</td><td>18 source feeds reconciled by hand</td><td>2 analysts for 3 days a month</td><td class="v">6 analyst days a month</td></tr>
+    </table>
+    <p class="caption" style="margin-top:20px">Figures are illustrative. Each assumption is stated so the bank can put in its own number.</p></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>08</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="09 Trust">
+        <header class="head">
+          <div class="eyebrow">Why you can trust it</div>
+          <h2 class="h2">Every number is checked, every person sees only their share, and <span class="hl">the AI never decides</span></h2>
+          
+        </header>
+        <div class="body"><div class="cols4">
+      <div class="panel"><div class="tag">Complete data</div><h3>1,045 bad rows kept with a reason</h3><p style="font-size:22px;color:var(--teal)">Every planted defect caught with the exact count. 176 of 177 files reconcile.</p></div>
+      <div class="panel"><div class="tag">Governed</div><h3>Four personas, four answers</h3><p style="font-size:22px;color:var(--teal)">The same query, run as each persona. Unity Catalog decides the rows and the masks.</p></div>
+      <div class="panel"><div class="tag">AI explains</div><h3>97% of letters match the recorded ground</h3><p style="font-size:22px;color:var(--teal)">Every misconduct letter found. Briefs follow the bank's rules 100% of the time and are judged by another model family.</p></div>
+      <div class="panel"><div class="tag">Controlled</div><h3>No one approves their own action</h3><p style="font-size:22px;color:var(--teal)">An allocation to an uncertified agent is refused before anyone approves it.</p></div>
+    </div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>09</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="10 Platform">
+        <header class="head">
+          <div class="eyebrow">The platform on one page</div>
+          <h2 class="h2">One platform, <span class="hl">one bundle</span>, one job</h2>
+          
+        </header>
+        <div class="body"><div class="plat"><div class="panel"><img src="assets/icons/lakeflow.svg" alt=""><div><h3>Lakeflow</h3><p>Auto Loader, declarative pipelines, quality rules and quarantine</p></div></div><div class="panel"><img src="assets/icons/unity-catalog.svg" alt=""><div><h3>Unity Catalog</h3><p>row filters, column masks, tags and the conduct controls as functions</p></div></div><div class="panel"><img src="assets/icons/mosaic-ai.svg" alt=""><div><h3>AI Functions and MLflow</h3><p>ai_query in the pipeline and judges from another model family</p></div></div><div class="panel"><img src="assets/icons/lakebase.svg" alt=""><div><h3>Lakebase</h3><p>Postgres for the case queue and the approvals</p></div></div><div class="panel"><img src="assets/icons/genie.svg" alt=""><div><h3>Genie</h3><p>three governed agents with benchmarks</p></div></div><div class="panel"><img src="assets/icons/apps.svg" alt=""><div><h3>Databricks Apps</h3><p>runs as the signed-in user</p></div></div><div class="panel"><img src="assets/icons/lakeflow-jobs.svg" alt=""><div><h3>Lakeflow Jobs</h3><p>one job, started by file arrival</p></div></div><div class="panel"><img src="assets/icons/ai-bi-dashboards.svg" alt=""><div><h3>AI/BI dashboards</h3><p>published without embedded credentials</p></div></div></div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>10</span></span></footer>
+      </section>
+      <section class="slide s-content" data-screen-label="11 Pilot">
+        <header class="head">
+          <div class="eyebrow">A bounded pilot</div>
+          <h2 class="h2">Six weeks in West and Central, with targets <span class="hl">agreed in week one</span></h2>
+          
+        </header>
+        <div class="body"><div class="cols3">
+      <div class="panel"><div class="tag">Scope</div><ul><li>West and Central collections.</li><li>6 weeks.</li><li>Your data, in your workspace.</li></ul></div>
+      <div class="panel"><div class="tag">Success criteria</div><ul><li>Roll-forward rate down by an agreed number of points on worked accounts.</li><li>No contacts outside the RBI hours on worked accounts.</li><li>Every source file reconciled each month.</li></ul></div>
+      <div class="panel dark"><div class="tag">What we need from you</div><ul><li>Read access to the dialer, field app, loan system and CRM extracts.</li><li>A collections manager for 2 hours a week.</li><li>A named compliance reviewer.</li></ul></div>
+    </div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>11</span></span></footer>
+      </section>
+      <section class="slide s-cover" data-screen-label="12 Close">
+        <div class="kicker">Next step</div>
+        <div class="center">
+          <h1>Start the pilot on a date <span class="hl">you choose</span></h1>
+          <p class="deck-sub">Name a collections manager and a compliance reviewer this week, and we agree the success criteria in week one.</p>
+        </div>
+        <div class="bottom">
+          <img src="assets/brand/databricks-logo-white.svg" alt="Databricks">
+          <span class="meta">FE Bar · Field Engineering</span>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Framework chrome — DO NOT EDIT below this line. -->
+  <nav class="deck-counter" role="navigation" aria-label="Deck navigation">
+    <button type="button" id="deck-prev" aria-label="Previous slide">‹</button>
+    <span class="deck-count"><span id="deck-cur">01</span> <span class="total">/ <span id="deck-total">01</span></span></span>
+    <button type="button" id="deck-next" aria-label="Next slide">›</button>
+  </nav>
+  <div class="deck-hint">← / → · space · R reset</div>
+
+  <script>
+    (function () {
+      var stage = document.getElementById('deck-stage');
+      var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+      var prev = document.getElementById('deck-prev');
+      var next = document.getElementById('deck-next');
+      var cur = document.getElementById('deck-cur');
+      var total = document.getElementById('deck-total');
+      var STORE = 'deck:idx:' + (location.pathname || '/');
+      var idx = 0;
+
+      // ---- scale-to-fit ---------------------------------------------------
+      // The stage is 1920×1080 and sits at .deck-shell's (0, 0) in normal
+      // block flow — the shell is intentionally NOT a grid/flex container,
+      // so the stage's natural top-left is (0, 0). We scale via transform
+      // with transform-origin:top-left, then translate by the remainder to
+      // center the scaled box in the viewport. This survives nested
+      // transforms (e.g. when the OD viewer wraps the iframe in its own
+      // scale wrapper at zoom != 100%).
+      function fit() {
+        var sw = window.innerWidth;
+        var sh = window.innerHeight;
+        var pad = 32;
+        var s = Math.min((sw - pad) / 1920, (sh - pad) / 1080);
+        if (!isFinite(s) || s <= 0) s = 1;
+        var tx = (sw - 1920 * s) / 2;
+        var ty = (sh - 1080 * s) / 2;
+        stage.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')';
+      }
+
+      // ---- navigation -----------------------------------------------------
+      function pad2(n) { return (n < 10 ? '0' : '') + n; }
+      function paint() {
+        slides.forEach(function (el, i) { el.classList.toggle('active', i === idx); });
+        if (cur) cur.textContent = pad2(idx + 1);
+        if (total) total.textContent = pad2(slides.length);
+        if (prev) prev.toggleAttribute('disabled', idx <= 0);
+        if (next) next.toggleAttribute('disabled', idx >= slides.length - 1);
+        postDeckState();
+      }
+      function go(i) {
+        idx = Math.max(0, Math.min(slides.length - 1, i));
+        paint();
+        try { localStorage.setItem(STORE, String(idx)); } catch (_) {}
+      }
+      var OD_DECK_PROTOCOL_VERSION = 1;
+      function postDeckState() {
+        try {
+          window.parent.postMessage({
+            type: 'od:slide-state',
+            protocolVersion: OD_DECK_PROTOCOL_VERSION,
+            active: idx,
+            count: slides.length
+          }, '*');
+        } catch (_) {}
+      }
+      function announceDeckProtocol() {
+        try {
+          window.parent.postMessage({
+            type: 'od:deck-ready',
+            protocolVersion: OD_DECK_PROTOCOL_VERSION,
+            capabilities: ["absolute-navigation","state-events"]
+          }, '*');
+        } catch (_) {}
+      }
+      window.addEventListener('message', function (event) {
+        var data = event && event.data;
+        if (!data || data.type !== 'od:slide') return;
+        if (data.protocolVersion != null && data.protocolVersion !== OD_DECK_PROTOCOL_VERSION) return;
+        var target = idx;
+        if (data.action === 'go') {
+          if (typeof data.index !== 'number' || !isFinite(data.index)) return;
+          target = Math.floor(data.index);
+        } else if (data.action === 'next') target = idx + 1;
+        else if (data.action === 'prev') target = idx - 1;
+        else if (data.action === 'first') target = 0;
+        else if (data.action === 'last') target = slides.length - 1;
+        else return;
+        go(target);
+      });
+      function onKey(e) {
+        if (e.__odDeckKeyHandled) return;
+        var t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.__odDeckKeyHandled = true; e.preventDefault(); go(idx + 1); }
+        else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.__odDeckKeyHandled = true; e.preventDefault(); go(idx - 1); }
+        else if (e.key === 'Home' || String(e.key).toLowerCase() === 'r') { e.__odDeckKeyHandled = true; e.preventDefault(); go(0); }
+        else if (e.key === 'End') { e.__odDeckKeyHandled = true; e.preventDefault(); go(slides.length - 1); }
+      }
+      // Capture phase + listen on both targets — inside the OD iframe,
+      // focus may be on window OR document; a single non-capture listener
+      // silently misses presses.
+      window.addEventListener('keydown', onKey, true);
+      document.addEventListener('keydown', onKey, true);
+      if (prev) prev.addEventListener('click', function () { go(idx - 1); });
+      if (next) next.addEventListener('click', function () { go(idx + 1); });
+      document.addEventListener('click', function (e) {
+        if (e.defaultPrevented) return;
+        if (e.button !== undefined && e.button !== 0) return;
+        if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+        var t = e.target;
+        while (t && t !== document.body && t !== document.documentElement) {
+          var tag = String(t.tagName || '').toUpperCase();
+          if (
+            tag === 'A' ||
+            tag === 'BUTTON' ||
+            tag === 'INPUT' ||
+            tag === 'TEXTAREA' ||
+            tag === 'SELECT' ||
+            t.isContentEditable ||
+            t.getAttribute('role') === 'button' ||
+            t.getAttribute('role') === 'link'
+          ) return;
+          t = t.parentElement;
+        }
+        focusDeck();
+        if (e.clientX < window.innerWidth / 2) go(idx - 1);
+        else go(idx + 1);
+      }, true);
+
+      // Auto-focus body so arrow keys work without an initial click.
+      document.body.setAttribute('tabindex', '-1');
+      document.body.style.outline = 'none';
+      function focusDeck() { try { window.focus(); document.body.focus({ preventScroll: true }); } catch (_) {} }
+      document.addEventListener('mousedown', focusDeck);
+      window.addEventListener('load', focusDeck);
+
+      // Restore last position.
+      try {
+        var saved = parseInt(localStorage.getItem(STORE) || '0', 10);
+        if (!isNaN(saved) && saved >= 0 && saved < slides.length) idx = saved;
+      } catch (_) {}
+
+      window.addEventListener('resize', fit);
+      announceDeckProtocol();
+      fit();
+      paint();
+      focusDeck();
+    })();
+  </script>
+
+
+
+<script type="application/json" id="speaker-notes">
+[
+ "[YOUR WORDS] Name the customer and the two people in the room. Say what they are about to see: the overview, the worklist, one case and one Genie question.",
+ "[YOUR WORDS] Lead with the four numbers, then the ask. Everything after this slide supports these numbers.",
+ "[YOUR WORDS] The Solapur and Indore figures come from the governed tables. Then the two RBI rules that make this urgent.",
+ "[YOUR WORDS] Contrast one manager's week today with the same week using the worklist.",
+ "[YOUR WORDS] Keep this at one sentence per stage for the CRO. Save the detail for the technical questions.",
+ "[YOUR WORDS] Tell, show, tell at each stop. Say what it means for them after each one.",
+ "[YOUR WORDS] Speak to each leader in turn, in their own measures.",
+ "[YOUR WORDS] Read each assumption aloud and invite them to replace it with their own number.",
+ "[YOUR WORDS] This answers 'can I trust the AI?' and 'what about a late or corrupted file?' before they ask.",
+ "[YOUR WORDS] One line on each product. Point out that it is one bundle and one job.",
+ "[YOUR WORDS] Read the three success criteria and the three asks.",
+ "[YOUR WORDS] Ask directly for a start date and the two names."
+]
+</script>
+
+</body></html>

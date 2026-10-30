@@ -76,11 +76,10 @@ FQ: Final = f"{CATALOG}.{SCHEMA}"          # fully-qualified prefix for governed
 WAREHOUSE_ID: Final = _required("DATABRICKS_WAREHOUSE_ID", "A serverless SQL warehouse id.")
 CHAT_ENDPOINT: Final = _env("DATABRICKS_CHAT_ENDPOINT", "databricks-claude-opus-4-8")
 
-# --- Lakebase (app state: actions, approvals, sessions) ----------------------
-# The instance name is deliberately not assumed: Lakebase has a per-workspace instance quota, so an
-# installer may well have to point at an existing instance rather than create one. State is isolated by
-# SCHEMA (LAKEBASE_SCHEMA), not by instance, so sharing an instance with another project is safe.
-LAKEBASE_INSTANCE: Final = _required("LAKEBASE_INSTANCE", "A Lakebase (serverless Postgres) instance name.")
+# --- Lakebase (operational state: the case queue, actions, approvals, sessions) --
+# An autoscaling Lakebase project's read-write endpoint, e.g.
+# projects/genie-control-tower/branches/production/endpoints/primary. State is isolated by SCHEMA.
+LAKEBASE_ENDPOINT: Final = _required("LAKEBASE_ENDPOINT", "A Lakebase autoscaling endpoint resource path.")
 LAKEBASE_DBNAME: Final = _env("LAKEBASE_DBNAME", "databricks_postgres")
 LAKEBASE_SCHEMA: Final = _env("LAKEBASE_SCHEMA", "control_tower")
 

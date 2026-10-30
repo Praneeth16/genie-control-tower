@@ -1,0 +1,407 @@
+{
+ "version": 2,
+ "config": {
+  "sample_questions": [
+   {
+    "id": "18ad0c61be8c2aaca65c3c6408576321",
+    "question": [
+     "Which affluent customers hold no credit card?"
+    ]
+   },
+   {
+    "id": "4085c0409daa25964b1ce8105086147c",
+    "question": [
+     "Where is the biggest cross-sell gap in the portfolio?"
+    ]
+   },
+   {
+    "id": "5ef0d390b0d929001cae5dc39149ddb9",
+    "question": [
+     "What is the incentive cost per rupee of business by grade?"
+    ]
+   },
+   {
+    "id": "876d5d8673deef66aefec1ff01a6b56c",
+    "question": [
+     "Compare incentive earned for high attainers who passed the quality gate against those who failed."
+    ]
+   },
+   {
+    "id": "cf51690b114cff10e42c9c042cf0f9b1",
+    "question": [
+     "Which RMs are paid a full incentive but fail the product-mix quality gate?"
+    ]
+   },
+   {
+    "id": "d0ba053358dac006efa5946c4acf264c",
+    "question": [
+     "Show attainment against target by region."
+    ]
+   },
+   {
+    "id": "df7c4f7b72d24ba21dcc1d706748293b",
+    "question": [
+     "Who are the top 10 RMs by attainment this month?"
+    ]
+   }
+  ]
+ },
+ "data_sources": {
+  "tables": [
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio",
+    "description": [
+     "Customer master, one row per customer. Key columns: customer_id, rm_id, branch_id, region, customer_segment (Mass/Mass Affluent/Affluent/Private/MSME), relationship_start, total_relationship_value, products_held, casa_balance, risk_rating, nri_flag, churn_risk_score."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.incentive_slabs",
+    "description": [
+     "Incentive slab grid by grade. Joined on a RANGE: rm_grade matches AND attainment_pct >= attainment_from_pct AND attainment_pct < attainment_to_pct. Key columns: slab_id, rm_grade, attainment_from_pct, attainment_to_pct, payout_pct_of_target, quality_gate_required, min_product_mix_score."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.product_holdings",
+    "description": [
+     "One row per customer-product pair, so counting rows counts HOLDINGS, not customers. Key columns: holding_id, customer_id, rm_id, product_code, opened_date, balance_or_limit, is_active, cross_sell_eligible."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers",
+    "description": [
+     "RM dimension, 180 RMs. Join only for rm_name, portfolio_count, date_joined, active_flag. Key columns: rm_id, rm_name, branch_id, region, zone, rm_grade (Junior/Mid/Senior/Lead), date_joined, portfolio_count, active_flag."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement",
+    "description": [
+     "PRIMARY TABLE for RM performance and incentive questions. Grain is one row per RM per month. Carries branch_id, region and rm_grade already, so region/branch/grade filters need no join. A cohort of ~21 RMs over-attains on volume with weak product mix, fails the quality gate, and carries clawback_flag = TRUE. Key columns: achievement_month, rm_id, branch_id, region, rm_grade, actual_casa_amount, actual_loan_amount, actual_cards, actual_insurance, product_mix_score, attainment_pct, incentive_earned, quality_gate_passed, clawback_flag."
+    ]
+   },
+   {
+    "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.rm_targets",
+    "description": [
+     "Monthly RM targets by product line. Same grain as rm_achievement. JOIN ON BOTH achievement_month = target_month AND rm_id = rm_id; joining on rm_id alone fans out across 18 months and inflates every total. Key columns: target_month, rm_id, branch_id, region, rm_grade, target_casa_amount, target_loan_amount, target_cards, target_insurance, target_product_mix_score."
+    ]
+   }
+  ]
+ },
+ "instructions": {
+  "text_instructions": [
+   {
+    "id": "6aec133472e04fbedcc237a0915705f2",
+    "content": [
+     "### Space metadata\nYou answer questions about relationship-manager performance, targets, attainment and incentive\npayouts for an Indian retail bank. All amounts are Indian Rupees (INR). All data is synthetic. The\ndata covers 2025-03-01 to 2026-08-01 and the current month is 2026-08-01. When a question says\n\"now\", \"current\", \"latest\" or \"this month\", use achievement_month = DATE'2026-08-01'.\nIf the question names NO period at all, use the FULL data window and say so. Do not narrow to the\ncurrent month unless the question asks for it \u2014 a silently injected period can reverse the answer to\na \"which is highest\" question, and the user has no way to see that it happened.\n\n### Data foundation\nrm_achievement is the primary table. Grain is one row per RM per month, so always aggregate unless\nthe user names a single RM.\nrm_achievement already carries branch_id, region and rm_grade, so filtering by region, branch or\ngrade needs NO join to relationship_managers. Join only for rm_name, portfolio_count, date_joined\nor active_flag.\nrm_targets shares the same grain. Join on BOTH achievement_month = target_month AND rm_id = rm_id.\nNever join on rm_id alone or you will fan out across 18 months and inflate every total.\nincentive_slabs is joined on a RANGE: rm_grade matches AND attainment_pct >= attainment_from_pct\nAND attainment_pct < attainment_to_pct.\ncustomer_portfolio is one row per customer. product_holdings is one row per customer-product pair,\nso counting rows there counts holdings, not customers.\n\n### Business terminology\nCASA means Current Account and Savings Account balances.\nAttainment means attainment_pct, the average of CASA and loan attainment, where 100 means target\nmet exactly. Target met means attainment_pct >= 100.\nProduct mix score means product_mix_score, 0 to 1, measuring how evenly volume spreads across\nproduct lines. Below 0.50 means volume is concentrated in one or two products.\nQuality gate means the product-mix threshold an RM must clear for a full payout;\nquality_gate_passed is FALSE when they missed it.\nClawback means clawback_flag = TRUE: the RM reached a full-payout band but failed the quality gate,\nso part of the incentive is recoverable. This is the signal for incentive distortion.\nCross-sell gap means products the customer does not hold. products_held of 1 or 2 with\ncross_sell_eligible = TRUE is the prime opportunity.\nChurn risk means churn_risk_score, 0 to 1; above 0.7 warrants retention action.\nLeague table means RMs ranked by a measure, usually attainment_pct or incentive_earned.\nIncentive per rupee of business means incentive_earned / (actual_casa_amount + actual_loan_amount).\n\n### Incentive quality\nIncentive distortion means paying a full incentive for volume while portfolio quality is poor. When asked\nabout incentive fairness or quality, compare RMs in full-payout attainment bands who failed the\nproduct-mix quality gate (clawback_flag = TRUE) against those at similar attainment who cleared it.\n\n### CRITICAL response standards\nALWAYS STATE THE COMPUTED ANSWER IN WORDS, as a number, before anything else. If you want to offer a\nbreakdown, state the answer first and then offer it. Never reply with only a follow-up question: the\nresult grid is not the answer a person reads, and a reply that asks \"would you prefer this by card\ntype?\" without giving the figure has answered nothing.\nWhen the question names a value that exists LITERALLY in a column, filter on exactly that value. Do\nnot widen it to related values. \"Affluent customers\" means customer_segment = 'Affluent', not\nAffluent plus Private plus Mass Affluent. If you believe the wider reading is what was meant, give\nthe exact answer first, then say what the wider figure would be and that it is a different question.\nAlways state the scope: the month or range, the region or branch, and the grade. Row-level security\nis enforced, so different users legitimately see different totals.\nRound percentages to one decimal place. Round INR to whole rupees with thousands separators.\nNEVER quote a total you did not compute in SQL.\nWhen comparing RMs, normalise by grade or by target, because targets scale with grade and raw\nvolume comparisons across grades mislead.\nIf a result would exceed 200 rows, aggregate further or LIMIT and say so.\n\n### Error handling\nIf a question needs a column not in these six tables, name the missing column rather than\nsubstituting a similar one.\nIf a question is about loan delinquency, collections, complaints or ombudsman cases, say it belongs\nto a different domain agent."
+    ]
+   }
+  ],
+  "example_question_sqls": [
+   {
+    "id": "2cdd09a1251cc3073e4d6bb56b9000c8",
+    "question": [
+     "Show attainment against target by region for the latest month."
+    ],
+    "sql": [
+     "SELECT a.region, COUNT(*) AS rms,\n       ROUND(SUM(t.target_casa_amount), 0) AS target_casa_inr,\n       ROUND(SUM(a.actual_casa_amount), 0) AS actual_casa_inr,\n       ROUND(100.0 * SUM(a.actual_casa_amount) / SUM(t.target_casa_amount), 1) AS casa_attainment_pct,\n       ROUND(100.0 * SUM(a.actual_loan_amount) / SUM(t.target_loan_amount), 1) AS loan_attainment_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement a JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.rm_targets t\n  ON a.achievement_month = t.target_month AND a.rm_id = t.rm_id\nWHERE a.achievement_month = DATE'2026-08-01' GROUP BY a.region ORDER BY casa_attainment_pct DESC"
+    ]
+   },
+   {
+    "id": "315390782dfd5247e75978d4e861a347",
+    "question": [
+     "Compare incentive earned for high attainers who passed the quality gate against those who failed."
+    ],
+    "sql": [
+     "SELECT CASE WHEN product_mix_score < 0.50 THEN 'Weak mix (<0.50)' ELSE 'Healthy mix (>=0.50)' END AS mix_band,\n       COUNT(*) AS rm_months, COUNT(DISTINCT rm_id) AS distinct_rms,\n       ROUND(AVG(attainment_pct), 1) AS avg_attainment_pct,\n       ROUND(AVG(actual_insurance), 1) AS avg_insurance_sold,\n       ROUND(AVG(incentive_earned), 0) AS avg_incentive_inr\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement WHERE attainment_pct >= 120\nGROUP BY CASE WHEN product_mix_score < 0.50 THEN 'Weak mix (<0.50)' ELSE 'Healthy mix (>=0.50)' END"
+    ]
+   },
+   {
+    "id": "32710e86cfa7c5482b613a4bfe34ec68",
+    "question": [
+     "Which RMs are being paid a full incentive but failing the product-mix quality gate?"
+    ],
+    "sql": [
+     "SELECT a.rm_id, r.rm_name, a.rm_grade, a.region, a.achievement_month,\n       ROUND(a.attainment_pct, 1) AS attainment_pct, ROUND(a.product_mix_score, 3) AS product_mix_score,\n       a.actual_insurance, ROUND(a.incentive_earned, 0) AS incentive_inr, a.clawback_flag\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement a JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers r ON a.rm_id = r.rm_id\nWHERE a.clawback_flag = TRUE AND a.achievement_month >= DATE'2026-06-01'\nORDER BY a.incentive_earned DESC LIMIT 50"
+    ]
+   },
+   {
+    "id": "6997d65c0310693c385b047cbd15ed6d",
+    "question": [
+     "What incentive slab did each RM land in this month?"
+    ],
+    "sql": [
+     "SELECT a.rm_id, a.rm_grade, ROUND(a.attainment_pct, 1) AS attainment_pct,\n       s.attainment_from_pct, s.attainment_to_pct, s.payout_pct_of_target,\n       s.quality_gate_required, s.min_product_mix_score,\n       ROUND(a.product_mix_score, 3) AS product_mix_score, a.quality_gate_passed,\n       ROUND(a.incentive_earned, 0) AS incentive_inr\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement a JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.incentive_slabs s\n  ON a.rm_grade = s.rm_grade AND a.attainment_pct >= s.attainment_from_pct\n AND a.attainment_pct < s.attainment_to_pct\nWHERE a.achievement_month = DATE'2026-08-01' ORDER BY a.attainment_pct DESC LIMIT 50"
+    ]
+   },
+   {
+    "id": "83f6bb42c7648d7bce7804ca1b4138eb",
+    "question": [
+     "Which affluent customers hold no credit card and are cross-sell eligible?"
+    ],
+    "sql": [
+     "SELECT c.customer_id, c.rm_id, c.customer_segment, c.products_held,\n       ROUND(c.total_relationship_value, 0) AS relationship_value_inr,\n       ROUND(c.casa_balance, 0) AS casa_balance_inr, ROUND(c.churn_risk_score, 3) AS churn_risk\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio c\nWHERE c.customer_segment = 'Affluent'\n  AND NOT EXISTS (SELECT 1 FROM serverless_lakebase_praneeth_catalog.control_tower_banking.product_holdings h\n                  WHERE h.customer_id = c.customer_id AND h.product_code = 'CC' AND h.is_active)\nORDER BY c.total_relationship_value DESC LIMIT 50"
+    ]
+   },
+   {
+    "id": "848897e9cd312310075ef568a3141f95",
+    "question": [
+     "Where is the biggest cross-sell gap in the portfolio?"
+    ],
+    "sql": [
+     "SELECT c.rm_id, r.rm_name, c.region, COUNT(*) AS customers,\n       SUM(CASE WHEN c.products_held <= 2 THEN 1 ELSE 0 END) AS thin_relationships,\n       ROUND(100.0 * SUM(CASE WHEN c.products_held <= 2 THEN 1 ELSE 0 END) / COUNT(*), 1) AS thin_pct,\n       ROUND(SUM(c.total_relationship_value), 0) AS portfolio_value_inr\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio c JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers r ON c.rm_id = r.rm_id\nGROUP BY c.rm_id, r.rm_name, c.region ORDER BY thin_relationships DESC LIMIT 20"
+    ]
+   },
+   {
+    "id": "dde864b83188eb20015b26fa7cc23b7a",
+    "question": [
+     "Who are the top 10 RMs by attainment this month?"
+    ],
+    "sql": [
+     "SELECT a.rm_id, r.rm_name, a.rm_grade, a.region, ROUND(a.attainment_pct, 1) AS attainment_pct,\n       ROUND(a.product_mix_score, 3) AS product_mix_score,\n       ROUND(a.incentive_earned, 0) AS incentive_inr, a.quality_gate_passed\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement a JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers r ON a.rm_id = r.rm_id\nWHERE a.achievement_month = DATE'2026-08-01' ORDER BY a.attainment_pct DESC LIMIT 10"
+    ]
+   }
+  ],
+  "join_specs": [
+   {
+    "id": "38ba0a49220614919d341246cda623fe",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement",
+     "alias": "rm_achievement"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers",
+     "alias": "relationship_managers"
+    },
+    "sql": [
+     "`rm_achievement`.`rm_id` = `relationship_managers`.`rm_id`",
+     "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+    ]
+   },
+   {
+    "id": "420b7f4b3114457c894ef59a30b31600",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio",
+     "alias": "customer_portfolio"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers",
+     "alias": "relationship_managers"
+    },
+    "sql": [
+     "`customer_portfolio`.`rm_id` = `relationship_managers`.`rm_id`",
+     "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+    ]
+   },
+   {
+    "id": "56eb65b985ebafd24004cbbfcd0b6a1b",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.product_holdings",
+     "alias": "product_holdings"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio",
+     "alias": "customer_portfolio"
+    },
+    "sql": [
+     "`product_holdings`.`customer_id` = `customer_portfolio`.`customer_id`",
+     "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+    ]
+   },
+   {
+    "id": "9104b91c4ec1f8d01a9302554c611161",
+    "left": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement",
+     "alias": "rm_achievement"
+    },
+    "right": {
+     "identifier": "serverless_lakebase_praneeth_catalog.control_tower_banking.rm_targets",
+     "alias": "rm_targets"
+    },
+    "sql": [
+     "`rm_achievement`.`rm_id` = `rm_targets`.`rm_id` AND `rm_achievement`.`achievement_month` = `rm_targets`.`target_month`",
+     "--rt=FROM_RELATIONSHIP_TYPE_ONE_TO_ONE--"
+    ]
+   }
+  ],
+  "sql_snippets": {
+   "measures": [
+    {
+     "id": "1821e98eecc325fe6c6c1b0285d51c8e",
+     "alias": "clawback_pct",
+     "sql": [
+      "100.0 * SUM(CASE WHEN rm_achievement.clawback_flag THEN 1 ELSE 0 END) / COUNT(*)"
+     ],
+     "display_name": "clawback rate percent",
+     "instruction": [
+      "WHEN_TO_USE: share of RM-months where a full payout was earned on volume but the product-mix quality gate failed. SCOPE_TABLES: rm_achievement. RISK_IF_MISUSED: the denominator is RM-months, not distinct RMs; say which you used."
+     ]
+    },
+    {
+     "id": "1f405f7ba6fa4a30067846eb6564b976",
+     "alias": "total_incentive_inr",
+     "sql": [
+      "SUM(rm_achievement.incentive_earned)"
+     ],
+     "display_name": "total incentive paid",
+     "instruction": [
+      "WHEN_TO_USE: incentive cost. SCOPE_TABLES: rm_achievement. RISK_IF_MISUSED: always filter to a period; unfiltered it sums all 18 months."
+     ]
+    },
+    {
+     "id": "e4fb232df1a8b08f3e5fe293af582878",
+     "alias": "casa_attainment_pct",
+     "sql": [
+      "100.0 * SUM(rm_achievement.actual_casa_amount) / SUM(rm_targets.target_casa_amount)"
+     ],
+     "display_name": "CASA attainment percent",
+     "instruction": [
+      "WHEN_TO_USE: CASA performance against target. SCOPE_TABLES: rm_achievement, rm_targets. RISK_IF_MISUSED: requires the two-column join on month AND rm_id; a rm_id-only join inflates the denominator 18-fold."
+     ]
+    }
+   ]
+  }
+ },
+ "benchmarks": {
+  "questions": [
+   {
+    "id": "1dec117bf576812d3ea4cb511ebc11c8",
+    "question": [
+     "What is the incentive cost per million rupees of business by grade since March 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT rm_grade, ROUND(1000000.0 * SUM(incentive_earned)\n             / SUM(actual_casa_amount + actual_loan_amount), 2) AS incentive_per_million_inr\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement WHERE achievement_month >= DATE'2026-03-01'\nGROUP BY rm_grade ORDER BY incentive_per_million_inr DESC"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "209d76cb3299a334a72e0d4ebabc7201",
+    "question": [
+     "For RMs above 120 percent attainment, what is the average incentive by product-mix band?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT CASE WHEN product_mix_score < 0.50 THEN 'Weak mix (<0.50)' ELSE 'Healthy mix (>=0.50)' END AS mix_band,\n       ROUND(AVG(incentive_earned), 0) AS avg_incentive_inr\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement WHERE attainment_pct >= 120\nGROUP BY CASE WHEN product_mix_score < 0.50 THEN 'Weak mix (<0.50)' ELSE 'Healthy mix (>=0.50)' END"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "2390a7816f3d4507a955cc747cf34dd4",
+    "question": [
+     "Which RM had the highest attainment in August 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT rm_id, ROUND(attainment_pct, 1) AS attainment_pct FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\nWHERE achievement_month = DATE'2026-08-01' ORDER BY attainment_pct DESC LIMIT 1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "39d015970bbd353d9a61dd1489c909be",
+    "question": [
+     "How many distinct RMs have attainment of 120 percent or more with a product mix score below 0.50?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(DISTINCT rm_id) AS distorted_rms FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\nWHERE attainment_pct >= 120 AND product_mix_score < 0.50"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "3ac3b4f26fd5ac4417b27e27c49fe661",
+    "question": [
+     "Which RM grade has the highest clawback rate?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT rm_grade, ROUND(100.0 * SUM(CASE WHEN clawback_flag THEN 1 ELSE 0 END) / COUNT(*), 1) AS clawback_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement GROUP BY rm_grade ORDER BY clawback_pct DESC LIMIT 1"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "945e825cfaa76c7636f0ae4a2c79f02a",
+    "question": [
+     "What was the total incentive paid in August 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT ROUND(SUM(incentive_earned), 0) AS total_incentive_inr FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement\nWHERE achievement_month = DATE'2026-08-01'"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "9820c9798bd8b46b072d84802c66b8c4",
+    "question": [
+     "How many customers hold two or fewer products?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS thin_relationships FROM serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio WHERE products_held <= 2"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "984ffe0baca08ee3bbe41c9c0641b283",
+    "question": [
+     "What is the CASA attainment percentage by region for August 2026?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT a.region, ROUND(100.0 * SUM(a.actual_casa_amount) / SUM(t.target_casa_amount), 1) AS casa_attainment_pct\nFROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement a JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.rm_targets t\n  ON a.achievement_month = t.target_month AND a.rm_id = t.rm_id\nWHERE a.achievement_month = DATE'2026-08-01' GROUP BY a.region ORDER BY casa_attainment_pct DESC"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "c0c1c6ac94cda526226bd667959bf202",
+    "question": [
+     "How many affluent-segment customers have no active credit card?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS customers FROM serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio c\nWHERE c.customer_segment = 'Affluent'\n  AND NOT EXISTS (SELECT 1 FROM serverless_lakebase_praneeth_catalog.control_tower_banking.product_holdings h\n                  WHERE h.customer_id = c.customer_id AND h.product_code = 'CC' AND h.is_active)"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "d1264ab47791d9c70e939295e49f821a",
+    "question": [
+     "How many RM-months carry a clawback flag?"
+    ],
+    "answer": [
+     {
+      "format": "SQL",
+      "content": [
+       "SELECT COUNT(*) AS clawback_rm_months FROM serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement WHERE clawback_flag = TRUE"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}
