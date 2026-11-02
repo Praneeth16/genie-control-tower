@@ -262,6 +262,12 @@
     .s-cover .bottom .meta { font: 400 18px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--white); }
 
     
+    /* ---------- appendix: run output ---------- */
+    .runout { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; height: 100%; min-height: 0; }
+    .runout .panel { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+    .runout .tag { font: 500 18px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); }
+    .runout pre { margin: 0; font: 400 19px/1.45 var(--font-mono); color: var(--navy); white-space: pre-wrap; overflow: hidden; }
+    .runout pre b { font-weight: 500; color: var(--lava); }
     /* ---------- this deck ---------- */
     /* Print every slide. The framework's print rule (.slide, display flex) loses to its own hide rule
        (.slide:not(.active), display none) on specificity, so only the active slide printed. Both slide
@@ -457,7 +463,52 @@
     </div></div>
         <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>11</span></span></footer>
       </section>
-      <section class="slide s-cover" data-screen-label="12 Close">
+      <section class="slide s-content" data-screen-label="12 Run output">
+        <header class="head">
+          <div class="eyebrow">Appendix: run output</div>
+          <h2 class="h2">It ran. This is <span class="hl">what the jobs printed</span></h2>
+        </header>
+        <div class="body"><div class="runout">
+      <div class="panel"><div class="tag">evaluate_ai task, cycle run 176820566676320, 2026-10-29 13:31 UTC</div><pre>$ databricks jobs get-run-output 714550313304993
+View run ai-eval-20261029-1331 at: .../ml/experiments/1300007936624440/runs/b5c1f842...
+component      prompt  judge  metric                      value
+letter_triage  v2      j2     letters                     713
+letter_triage  v2      j2     errors                      0
+letter_triage  v2      j2     <b>ground_accuracy             0.9705</b>
+letter_triage  v2      j2     conduct_recall              1.0
+letter_triage  v2      j2     conduct_precision           1.0
+case_brief     v4      j2     briefs                      200
+case_brief     v4      j2     <b>rule_agreement_pass_rate    1.0</b>
+case_brief     v4      j2     numbers_grounded_pass_rate  1.0
+case_brief     v4      j2     grounded_pass_rate          0.88
+case_brief     v4      j2     plain_language_pass_rate    0.86
+
+$ databricks jobs get-run 366295467750773
+trigger FILE_ARRIVAL   result SUCCESS   5 tasks, all SUCCESS
+refresh_pipeline 274 s · case_briefs 149 s · evaluate_ai 638 s · sync_cases 46 s</pre></div>
+      <div class="panel"><div class="tag">Genie Conversation API against ground-truth SQL, 2026-11-02</div><pre>Q: What was the microfinance delinquency percentage
+   in Solapur in May 2026?
+Genie SQL: SELECT COUNT(*) AS accounts,
+   SUM(CASE WHEN dpd_days > 0 THEN 1 ELSE 0 END) AS delinquent,
+   ROUND(try_divide(100.0 * SUM(...), COUNT(*)), 1) AS pct
+   FROM delinquency_monthly d JOIN branch_master b ON branch_id
+   WHERE snapshot_month = DATE'2026-05-01'
+   AND product_code = 'MFI' AND b.city = 'Solapur'
+Genie result:  511 accounts, 223 delinquent, <b>43.6%</b>
+Ground truth:  <b>43.6%</b>
+
+recon_completeness:  RECONCILED 176 · BREAK 1
+  2026-06 dialer/contacts/contacts_2026-06.csv
+  landed 3455 of 3492 declared rows (37 missing)
+
+UPDATE case_history ... -> refused:
+  case_history is append-only: UPDATE refused
+holds_required_role(hold_incentive_payout, persona) -> False
+  does not hold the 'HR Compensation' role</pre></div>
+    </div></div>
+        <footer class="foot"><img src="assets/brand/databricks-logo-navy.svg" alt="Databricks"><span class="meta"><span>Synthetic data · FE Bar · Genie Control Tower</span><span>12</span></span></footer>
+      </section>
+      <section class="slide s-cover" data-screen-label="13 Close">
         <div class="kicker">Next step</div>
         <div class="center">
           <h1>Start the pilot on a date <span class="hl">you choose</span></h1>
@@ -637,6 +688,7 @@
  "This slide answers two questions before they are asked. Can I trust the AI? The AI reads and explains. The bank's rules decide. The letter triage agrees with the grievance desk on 97% of letters, and a judge from a different model family grades the briefs. What about a late or corrupted file? Every file is reconciled against its manifest. 176 of 177 reconciled, and the one short file is shown as a break, not hidden. 1,045 bad rows were kept with a reason. Every action needs a named approver, and the person who raised it cannot approve it.",
  "One line on each product. Lakeflow ingests and conforms the files. Unity Catalog holds the row filters, masks and entitlements. AI Functions run the triage and the briefs, and MLflow judges them. Lakebase holds the case queue. Genie answers questions. Databricks Apps is the screen the officers use. Lakeflow Jobs runs the whole cycle on file arrival. It is one bundle and one job.",
  "Scope is West and Central collections for six weeks. Three success criteria, agreed in week one: roll-forward rate down by a number of points we set together, zero contacts outside RBI hours on worked accounts, and every source file reconciled each month. Three things we need: read access to the dialer, field app, loan system and CRM extracts, a collections manager for two hours a week, and a named compliance reviewer.",
+ "Appendix, only if someone asks whether this has run. Left is the evaluation task's own standard output from the Jobs API, and the file-arrival run with every task green. Right is Genie's SQL and answer next to the ground truth, the one file that failed reconciliation, and two refusals: a rewrite of the case history and an approval by a persona without the role. The full output is in RUN_EVIDENCE.md and run_output/ in the repository.",
  "Ask directly. Can we agree a start date for the pilot this week? And can you name the collections manager and the compliance reviewer? Then stop talking and wait for the answer."
 ]
 </script>

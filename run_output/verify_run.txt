@@ -1,7 +1,5 @@
 # verify_run.ipynb, as plain text
 
-The same cells and outputs as run_output/verify_run.ipynb, for readers that do not open notebooks.
-
 # Proof that the build ran
 
 Every cell below was executed against the deployed bundle and its output saved. The run time is in the
@@ -22,7 +20,7 @@ print("genie      ", ctx.spaces)
 
 Output:
 ```
-executed at 2026-11-02 18:50 UTC
+executed at 2026-11-02 19:50 UTC
 workspace   https://workspace.example.com
 schema      serverless_lakebase_praneeth_catalog.control_tower_banking
 pipeline    9fa6adcc-8175-487f-ad73-3f260e63a359
@@ -47,12 +45,12 @@ Output:
 ```
 | update_id | state | cause | created |
 |---|---|---|---|
+| f98f0833-e9bd-4eea-9778-140050cfaeee | COMPLETED | API_CALL | 2026-11-02 19:47 UTC |
+| 4d7e703f-988d-4ee0-ba6e-b6e810c68766 | CANCELED | RETRY_ON_FAILURE | 2026-11-02 19:45 UTC |
+| 514f0c2f-4138-4ae4-a343-f2ca88bf9890 | FAILED | RETRY_ON_FAILURE | 2026-11-02 19:44 UTC |
+| 09a7bed0-a4f1-4e6a-8b9f-25ced98fab69 | FAILED | RETRY_ON_FAILURE | 2026-11-02 19:44 UTC |
+| e33f650c-6167-4f63-886a-ba93448778ac | FAILED | API_CALL | 2026-11-02 19:43 UTC |
 | 08a95391-0462-4432-8a46-310621add421 | COMPLETED | JOB_TASK | 2026-10-29 13:27 UTC |
-| 7dd133ab-2ff7-47fe-a3f5-46b56a9a1095 | COMPLETED | API_CALL | 2026-10-29 12:22 UTC |
-| 84611eaa-8954-404b-a1ff-87e248ddf28a | COMPLETED | JOB_TASK | 2026-10-29 10:28 UTC |
-| 0fa48c1b-e9d9-4ab1-874f-ccd92711f507 | COMPLETED | JOB_TASK | 2026-10-29 09:54 UTC |
-| 5dcfd5a8-2987-45f6-b178-a17b81be485a | COMPLETED | API_CALL | 2026-10-29 09:50 UTC |
-| a90c36b1-6f88-4398-b78b-d7e1e2354f82 | COMPLETED | API_CALL | 2026-10-29 09:07 UTC |
 ```
 
 ## 2. Lakeflow: expectations from the event log
@@ -75,7 +73,7 @@ Output:
 ```
 | dataset | expectation | passed | failed |
 |---|---|---|---|
-| serverless_lakebase_praneeth_catalog.control_tower_banking.recon_completeness | file_reconciled | 686 | 4 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.recon_completeness | file_reconciled | 862 | 5 |
 | serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | amount_positive | 4220 | 0 |
 | serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | dates_readable | 4220 | 0 |
 | serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | raised_after_transaction | 4200 | 20 |
@@ -414,23 +412,17 @@ print(table(cols, rows))
 Output:
 ```
 question: What was the microfinance delinquency percentage in Solapur in May 2026?
-conversation 01f1d6ee599413e5807663ea73805882 message 01f1d6ee599f1416ba1259b8cd4a90cd status COMPLETED
+conversation 01f1d6f69e0f1d52a15308f74557c0f1 message 01f1d6f69e3c18f3b2592e8ae18290f6 status COMPLETED
 
 Genie SQL:
-SELECT COUNT(*) AS `accounts`, SUM(CASE WHEN `d`.`dpd_days` > 0 THEN 1 ELSE 0 END) AS `delinquent_accounts`, ROUND(try_divide(100.0 * SUM(CASE WHEN `d`.`dpd_days` > 0 THEN 1 ELSE 0 END),COUNT(*)), 1) AS `delinquency_pct`
-FROM `serverless_lakebase_praneeth_catalog`.`control_tower_banking`.`delinquency_monthly` AS `d`
-JOIN `serverless_lakebase_praneeth_catalog`.`control_tower_banking`.`branch_master` AS `b`
-  ON `d`.`branch_id` = `b`.`branch_id`
-WHERE `d`.`product_code` = 'MFI'
-  AND `b`.`city` = 'Solapur'
-  AND `d`.`snapshot_month` = DATE'2026-05-01'
+SELECT COUNT(*) AS `accounts`, SUM(CASE WHEN `d`.`dpd_days` > 0 THEN 1 ELSE 0 END) AS `delinquent_accounts`, ROUND(try_divide(100.0 * SUM(CASE WHEN `d`.`dpd_days` > 0 THEN 1 ELSE 0 END),COUNT(*)), 1) AS `delinquency_pct` FROM `serverless_lakebase_praneeth_catalog`.`control_tower_banking`.`delinquency_monthly` AS `d` JOIN `serverless_lakebase_praneeth_catalog`.`control_tower_banking`.`branch_master` AS `b` ON `d`.`branch_id` = `b`.`branch_id` WHERE `d`.`product_code` = 'MFI' AND `b`.`city` = 'Solapur' AND `d`.`snapshot_month` = DATE'2026-05-01'
 
 Genie result:
 | accounts | delinquent_accounts | delinquency_pct |
 |---|---|---|
 | 511 | 223 | 43.6 |
 
-Genie said: The microfinance delinquency percentage in Solapur in **May 2026** was **43.6%**, based on **223 delinquent accounts** out of **511 accounts**. In this Solapur microfinance snapshot for May 2026, nearly **4 in 10 accounts** were past due.
+Genie said: **43.6%** was the microfinance delinquency percentage in **Solapur** for **May 2026**. In that scope, **223** out of **511** accounts were delinquent, so just under half of the microfinance accounts in Solapur were past due.
 
 ground-truth SQL:
 SELECT ROUND(100.0 * SUM(CASE WHEN d.dpd_days > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) AS delinquency_pct
@@ -560,7 +552,55 @@ authorise_approver(own action) -> False | separation of duties: you cannot appro
 holds_required_role(assign_recovery_agency, administrator) -> True | builder@example.com holds the Collections Head role
 ```
 
-## 11. The app, as the signed-in user
+## 11. Credit cost and cost to collect
+
+`executive_kpis` is a gold table that computes the two executive figures the other tables do not state:
+credit cost for the Chief Risk Officer and cost to collect for the Head of Collections. Both rest on an
+assumption written on the column comment (a 15 percent provision on NPA outstanding, and INR 25 per call
+or INR 350 per field visit), so the bank can replace it.
+
+```python
+cols, rows = ctx.sql(f'''
+SELECT report_month, round(sum(book_outstanding_inr) / 1e7, 1) AS book_crore, round(sum(npa_outstanding_inr) / 1e7, 2) AS npa_crore,
+       round(100 * sum(npa_outstanding_inr) / sum(book_outstanding_inr), 2) AS gnpa_pct,
+       round(sum(credit_cost_inr) / 1e5, 1) AS credit_cost_lakh,
+       sum(contact_attempts) AS contacts, round(sum(collection_cost_inr) / 1e5, 1) AS collection_cost_lakh,
+       round(sum(amount_collected_inr) / 1e7, 2) AS collected_crore,
+       round(100 * sum(collection_cost_inr) / sum(amount_collected_inr), 2) AS cost_to_collect_pct
+FROM {ctx.fq}.executive_kpis WHERE report_month >= DATE'2026-01-01' GROUP BY report_month ORDER BY report_month''')
+print(table(cols, rows))
+cols, rows = ctx.sql(f"SELECT region, gnpa_pct, credit_cost_inr, cost_to_collect_pct FROM {ctx.fq}.executive_kpis WHERE report_month = DATE'2026-08-01' ORDER BY region")
+print(table(cols, rows))
+cols, rows = ctx.sql(f"DESCRIBE TABLE {ctx.fq}.executive_kpis")
+print(table(cols, [r for r in rows if r[0] in ('provision_required_inr', 'collection_cost_inr')]))
+```
+
+Output:
+```
+| report_month | book_crore | npa_crore | gnpa_pct | credit_cost_lakh | contacts | collection_cost_lakh | collected_crore | cost_to_collect_pct |
+|---|---|---|---|---|---|---|---|---|
+| 2026-01-01 | 609.7 | 15.66 | 2.57 | 6.3 | 3433 | 2.7 | 2.08 | 1.29 |
+| 2026-02-01 | 609.7 | 16.41 | 2.69 | 11.2 | 3301 | 2.6 | 1.94 | 1.34 |
+| 2026-03-01 | 609.7 | 24.42 | 4.01 | 120.3 | 3500 | 2.7 | 2.17 | 1.27 |
+| 2026-04-01 | 609.7 | 23.7 | 3.89 | -10.9 | 3938 | 3.1 | 2.32 | 1.34 |
+| 2026-05-01 | 609.7 | 27.96 | 4.59 | 64.0 | 4401 | 3.6 | 2.53 | 1.42 |
+| 2026-06-01 | 609.7 | 24.2 | 3.97 | -56.4 | 4102 | 3.3 | 2.19 | 1.5 |
+| 2026-07-01 | 609.7 | 21.42 | 3.51 | -41.7 | 3810 | 3.0 | 2.48 | 1.2 |
+| 2026-08-01 | 609.7 | 17.98 | 2.95 | -51.7 | 3566 | 2.8 | 2.27 | 1.23 |
+| region | gnpa_pct | credit_cost_inr | cost_to_collect_pct |
+|---|---|---|---|
+| Central | 4.98 | -3446600.01 | 0.79 |
+| East | 2.09 | 433962.94 | 1.17 |
+| North | 1.45 | -1855976.69 | 1.32 |
+| South | 3.36 | -68999.17 | 1.1 |
+| West | 1.95 | -232885.35 | 2.07 |
+| col_name | data_type | comment |
+|---|---|---|
+| provision_required_inr | double | ASSUMPTION: 15 percent of NPA outstanding, the RBI minimum provision for a substandard asset. Replace with the bank's provisioning policy. |
+| collection_cost_inr | double | ASSUMPTION: INR 25 per call or message and INR 350 per field visit. Replace with the bank's agency rate card. |
+```
+
+## 12. The app, as the signed-in user
 
 `/api/health` on the deployed app. `obo_active` true means reads run as the caller, not the app.
 

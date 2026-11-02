@@ -40,3 +40,5 @@ The slides in `deck/genie-control-tower.html` follow this outline, and `deck/gen
     - What we need from the bank: read access to the dialer, field app, LOS and CRM extracts, a collections manager for two hours a week, and a named compliance reviewer.
 
 12. Close. A start date for the pilot and the people to name this week.
+
+13. Appendix: run output. Only shown if asked. Left, the evaluation task's standard output and the file-arrival job run. Right, Genie's SQL and answer against ground truth, the one reconciliation break, and two refusals. Full output in `RUN_EVIDENCE.md` and `run_output/`.

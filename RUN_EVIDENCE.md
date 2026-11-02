@@ -1,0 +1,641 @@
+<!-- GENERATED 2026-11-02 19:50 UTC by tools/verify_run.py against the live workspace. Do not edit. -->
+# Run evidence
+
+This file is the executed notebook `run_output/verify_run.ipynb` as plain markdown: each cell's code, then exactly what it printed when it ran against the deployed bundle. Raw job logs fetched from the Jobs API are in `run_output/task_logs/`. The fuller evidence pack, one file per stage, is in `evidence/`.
+
+
+Every cell below was executed against the deployed bundle and its output saved. The run time is in the
+first output. The notebook is produced by `tools/verify_run.py`, which executes these cells in order and
+stores what each one printed. Re-run it to refresh the outputs.
+
+```python
+import datetime as dt, json
+from tools.generate_evidence import Ctx, table
+ctx = Ctx(PROFILE)
+print("executed at", dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+print("workspace  ", ctx.w.config.host)
+print("schema     ", ctx.fq)
+print("pipeline   ", ctx.pipeline_id)
+print("jobs       ", {k: v for k, v in ctx.jobs.items() if k in ("ct_setup", "ct_cycle", "ct_land_period")})
+print("genie      ", ctx.spaces)
+```
+
+Output:
+```
+executed at 2026-11-02 19:50 UTC
+workspace   https://workspace.example.com
+schema      serverless_lakebase_praneeth_catalog.control_tower_banking
+pipeline    9fa6adcc-8175-487f-ad73-3f260e63a359
+jobs        {'ct_cycle': '112274750105468', 'ct_land_period': '629747267842440', 'ct_setup': '65492087776430'}
+genie       {'collections': '01f1d381797215d29c768c621cd5dd7a', 'grievance': '01f1d381796f188d89c4ca7e49e0a2b3', 'rm': '01f1d38179711c44b7b1dc4806cde566'}
+```
+
+## 1. Lakeflow: the pipeline's own update history
+
+The pipeline is a serverless Spark Declarative Pipeline. These are its most recent updates, read from the
+Pipelines API. `JOB_TASK` means the cycle job started it. The update at 10:28 on 29 Oct was started by the
+cycle job after the August files arrived.
+
+```python
+ups = ctx.w.pipelines.list_updates(ctx.pipeline_id, max_results=6).updates or []
+rows = [[u.update_id, u.state.value, u.cause.value,
+         dt.datetime.fromtimestamp(u.creation_time / 1000, dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")] for u in ups]
+print(table(["update_id", "state", "cause", "created"], rows))
+```
+
+Output:
+```
+| update_id | state | cause | created |
+|---|---|---|---|
+| f98f0833-e9bd-4eea-9778-140050cfaeee | COMPLETED | API_CALL | 2026-11-02 19:47 UTC |
+| 4d7e703f-988d-4ee0-ba6e-b6e810c68766 | CANCELED | RETRY_ON_FAILURE | 2026-11-02 19:45 UTC |
+| 514f0c2f-4138-4ae4-a343-f2ca88bf9890 | FAILED | RETRY_ON_FAILURE | 2026-11-02 19:44 UTC |
+| 09a7bed0-a4f1-4e6a-8b9f-25ced98fab69 | FAILED | RETRY_ON_FAILURE | 2026-11-02 19:44 UTC |
+| e33f650c-6167-4f63-886a-ba93448778ac | FAILED | API_CALL | 2026-11-02 19:43 UTC |
+| 08a95391-0462-4432-8a46-310621add421 | COMPLETED | JOB_TASK | 2026-10-29 13:27 UTC |
+```
+
+## 2. Lakeflow: expectations from the event log
+
+Every data-quality rule is an expectation. The counts come from `event_log()` for this pipeline, summed over
+every update since the tables were created.
+
+```python
+cols, rows = ctx.sql(f'''
+SELECT e.dataset, e.name AS expectation, sum(e.passed_records) AS passed, sum(e.failed_records) AS failed
+FROM (SELECT explode(from_json(details:flow_progress:data_quality:expectations,
+        'array<struct<name:string,dataset:string,passed_records:bigint,failed_records:bigint>>')) AS e
+      FROM event_log('{ctx.pipeline_id}') WHERE event_type = 'flow_progress'
+        AND details:flow_progress:data_quality:expectations IS NOT NULL) x
+GROUP BY ALL ORDER BY 1, 2''')
+print(table(cols, rows, 80))
+```
+
+Output:
+```
+| dataset | expectation | passed | failed |
+|---|---|---|---|
+| serverless_lakebase_praneeth_catalog.control_tower_banking.recon_completeness | file_reconciled | 862 | 5 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | amount_positive | 4220 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | dates_readable | 4220 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_chargebacks | raised_after_transaction | 4200 | 20 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_complaints | has_complaint_id | 9693 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_complaints | received_date_readable | 9693 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_complaints | resolved_after_received | 9693 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_dialer | amounts_not_negative | 53284 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_dialer | arrived_in_period | 53016 | 268 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_dialer | contact_time_readable | 53254 | 30 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_dialer | has_loan_account | 53284 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_field_app | amounts_not_negative | 10630 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_field_app | arrived_in_period | 10630 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_field_app | contact_time_readable | 10630 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_contacts_from_field_app | has_loan_account | 10605 | 25 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_delinquency | dpd_not_negative | 108000 | 25 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_delinquency | dpd_readable | 108025 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_delinquency | has_loan_account | 108025 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_delinquency | snapshot_month_readable | 108025 | 0 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_upi_disputes | amount_positive | 26316 | 35 |
+| serverless_lakebase_praneeth_catalog.control_tower_banking.silver_upi_disputes | txn_date_readable | 26351 | 0 |
+```
+
+## 3. Lakeflow: every file reconciled against its sender's manifest
+
+`recon_completeness` compares what each source system declared in its manifest with what landed, what
+loaded and what was quarantined. One file is a BREAK on purpose: the June dialer file was truncated in
+transfer and its manifest still counts the lost rows.
+
+```python
+cols, rows = ctx.sql(f"SELECT status, count(*) AS files FROM {ctx.fq}.recon_completeness GROUP BY status ORDER BY status")
+print(table(cols, rows))
+cols, rows = ctx.sql(f"SELECT * FROM {ctx.fq}.recon_completeness WHERE status = 'BREAK'")
+print(table(cols, rows))
+```
+
+Output:
+```
+| status | files |
+|---|---|
+| BREAK | 1 |
+| RECONCILED | 176 |
+| period | path | feed | declared_rows | landed_rows | loaded_rows | quarantined_rows | declared_amount | landed_amount | status | break_reason |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-06 | dialer/contacts/contacts_2026-06.csv | dialer_contacts | 3492 | 3455 | 3454 | 1 | 1.742543213E7 | 1.7289699E7 | BREAK | landed 3455 of 3492 declared rows (37 missing) |
+```
+
+## 4. Lakeflow: what the quality rules caught, and the rows in gold
+
+`data_quality_summary` is a gold table that counts the quarantined rows by reason. `gold_row_counts` is the
+unfiltered count of each governed table and is what the app's guardrails read.
+
+```python
+cols, rows = ctx.sql(f"SELECT * FROM {ctx.fq}.data_quality_summary ORDER BY 1, 2")
+print(table(cols, rows, 40))
+cols, rows = ctx.sql(f"SELECT * FROM {ctx.fq}.gold_row_counts ORDER BY 1")
+print(table(cols, rows, 40))
+```
+
+Output:
+```
+| entity | check_type | reason | row_count |
+|---|---|---|---|
+| chargebacks | quarantined | raised before transaction | 20 |
+| collections_activity | de-duplicated | re-sent copy of a contact already received | 589 |
+| collections_activity | late | contact uploaded in a later month's file | 236 |
+| collections_activity | orphaned | unknown loan account | 40 |
+| collections_activity | quarantined | unparseable contact timestamp | 30 |
+| collections_activity | quarantined | missing loan account | 25 |
+| complaints | de-duplicated | re-sent copy of a complaint already received | 15 |
+| complaints | orphaned | unknown complaint category | 18 |
+| delinquency_monthly | quarantined | negative days past due | 25 |
+| loan_accounts | orphaned | unknown product code | 12 |
+| upi_disputes | quarantined | non-positive amount | 35 |
+| table_name | row_count |
+|---|---|
+| branch_master | 18 |
+| chargebacks | 4200 |
+| collections_activity | 63230 |
+| complaint_categories | 10 |
+| complaints | 9660 |
+| customer_portfolio | 9000 |
+| delinquency_monthly | 108000 |
+| incentive_slabs | 24 |
+| loan_accounts | 6000 |
+| product_holdings | 26916 |
+| product_master | 8 |
+| recovery_agents | 60 |
+| relationship_managers | 180 |
+| repayment_schedule | 5633 |
+| rm_achievement | 3240 |
+| rm_targets | 3240 |
+| upi_disputes | 26316 |
+```
+
+## 5. The worklist in gold
+
+`collections_priority` is the ranked worklist. The score components are stored in words on every row.
+
+```python
+cols, rows = ctx.sql(f"SELECT count(*) AS accounts, round(sum(outstanding_principal) / 1e7, 2) AS outstanding_crore FROM {ctx.fq}.collections_priority")
+print(table(cols, rows))
+cols, rows = ctx.sql(f"SELECT * FROM {ctx.fq}.collections_priority ORDER BY priority_score DESC LIMIT 3")
+for r in rows:
+    print(json.dumps(dict(zip(cols, r)), indent=1, default=str)[:1800])
+```
+
+Output:
+```
+| accounts | outstanding_crore |
+|---|---|
+| 589 | 44.1 |
+{
+ "loan_account_id": "LN000770",
+ "customer_id": "CU002307",
+ "product_code": "CV",
+ "branch_id": "BR007",
+ "region": "Central",
+ "snapshot_month": "2026-08-01",
+ "dpd_days": "121",
+ "dpd_bucket": "4-NPA (90+)",
+ "is_npa": "true",
+ "outstanding_principal": "3297017.38",
+ "overdue_amount": "997347.76",
+ "forward_rolls_3m": "2",
+ "contacts_90d": "0",
+ "promises_90d": "0",
+ "payments_90d": "0",
+ "out_of_hours_contacts_90d": "0",
+ "uncertified_agent_contacts_90d": "0",
+ "last_contact_date": null,
+ "open_grievance": "false",
+ "ai_alleged_conduct_breach": "false",
+ "dpd_points": "50",
+ "roll_points": "20",
+ "exposure_points": "15",
+ "promise_points": "0",
+ "priority_score": "85",
+ "priority_rank": "1",
+ "drivers": "[\"Days past due 121 (4-NPA (90+)): +50\",\"Rolled to a worse bucket in 2 of the last 3 months: +20\",\"Outstanding INR 3,297,017: +15\"]",
+ "conduct_flags": "[]",
+ "recommended_treatment": "Settlement or legal review"
+}
+{
+ "loan_account_id": "LN000666",
+ "customer_id": "CU004136",
+ "product_code": "CV",
+ "branch_id": "BR007",
+ "region": "Central",
+ "snapshot_month": "2026-08-01",
+ "dpd_days": "108",
+ "dpd_bucket": "4-NPA (90+)",
+ "is_npa": "true",
+ "outstanding_principal": "2592106.44",
+ "overdue_amount": "699868.74",
+ "forward_rolls_3m": "2",
+ "contacts_90d": "0",
+ "promises_90d": "0",
+ "payments_90d": "0",
+ "out_of_hours_contacts_90d": "0",
+ "uncertified_agent_contacts_90d": "0",
+ "last_contact_date": null,
+ "open_grievance": "false",
+ "ai_alleged_conduct_breach": "false",
+ "dpd_points": "50",
+ "roll_points": "20",
+ "exposure_points": "15",
+ "promise_points": "0",
+ "priority_score": "85",
+ "priority_rank": "2",
+ "drivers": "[\"Days past due 108 (4-NPA (90+)): +50\",\"Rolled to a worse bucket in 2 of the last 3 months: +20\",\"Outstanding INR 2,592,106: +15\"]",
+ "conduct_flags": "[]",
+ "recommended_treatment": "Settlement or legal review"
+}
+{
+ "loan_account_id": "LN005321",
+ "customer_id": "CU007067",
+ "product_code": "CV",
+ "branch_id": "BR006",
+ "region": "Central",
+ "snapshot_month": "2026-08-01",
+ "dpd_days": "110",
+ "dpd_bucket": "4-NPA (90+)",
+ "is_npa": "true",
+ "outstanding_principal": "2335861.56",
+ "overdue_amount": "642361.93",
+ "forward_rolls_3m": "2",
+ "contacts_90d": "13",
+ "promises_90d": "3",
+ "payments_90d": "4",
+ "out_of_hours_contacts_90d": "1",
+ "uncertified_agent_contacts_90d": "9",
+ "last_contact_date": "2026-08-27",
+ "open_grievance": "false",
+ "ai_alleged_conduct_breach": "false",
+ "dpd_points": "50",
+ "roll_points": "20",
+ "exposure_points": "15",
+ "promise_points": "0",
+ "priority_score": "85",
+ "priority_rank": "3",
+ "drivers": "[\"Days past due 110 (4-NPA (90+)): +50\",\"Rolled to a worse bucket in 2 of the last 3 months: +20\",\"Outstanding INR 2,335,862: +15\"]",
+ "conduct_flags": "[\"1 contact(s) outside 08:00-19:00 IST in 90 days\",\"9 contact(s) by an uncertified or lapsed agent in 90 days\"]",
+ "recommended_treatment": "Reassign to a certified agency and review conduct"
+}
+```
+
+## 6. AI evaluation, every cycle
+
+The cycle job's `evaluate_ai` task grades the letter triage against the recorded ground and the briefs
+against the bank's rules and four MLflow judges, then writes one row per metric to `ai_eval_summary`. The
+history below is that table. Each `evaluated_at` is one cycle, so the evaluation is an ongoing check, not a
+one-off.
+
+```python
+cols, rows = ctx.sql(f'''
+SELECT date_trunc('minute', evaluated_at) AS evaluated_at, component, prompt_version, judge_version, metric, round(value, 3) AS value
+FROM {ctx.fq}.ai_eval_summary
+WHERE metric IN ('ground_accuracy', 'conduct_recall', 'rule_agreement_pass_rate', 'grounded_pass_rate', 'plain_language_pass_rate')
+ORDER BY evaluated_at, component, metric''')
+print(table(cols, rows, 120))
+```
+
+Output:
+```
+| evaluated_at | component | prompt_version | judge_version | metric | value |
+|---|---|---|---|---|---|
+| 2026-10-29T09:21:00.000Z | case_brief | v1 | j1 | grounded_pass_rate | 0.0 |
+| 2026-10-29T09:21:00.000Z | case_brief | v1 | j1 | plain_language_pass_rate | 0.875 |
+| 2026-10-29T09:21:00.000Z | case_brief | v1 | j1 | rule_agreement_pass_rate | 0.14 |
+| 2026-10-29T09:21:00.000Z | letter_triage | v1 | j1 | conduct_recall | 1.0 |
+| 2026-10-29T09:21:00.000Z | letter_triage | v1 | j1 | ground_accuracy | 0.871 |
+| 2026-10-29T09:34:00.000Z | case_brief | v1 | j2 | grounded_pass_rate | 0.38 |
+| 2026-10-29T09:34:00.000Z | case_brief | v1 | j2 | plain_language_pass_rate | 0.875 |
+| 2026-10-29T09:34:00.000Z | case_brief | v1 | j2 | rule_agreement_pass_rate | 0.14 |
+| 2026-10-29T09:34:00.000Z | letter_triage | v1 | j2 | conduct_recall | 1.0 |
+| 2026-10-29T09:34:00.000Z | letter_triage | v1 | j2 | ground_accuracy | 0.871 |
+| 2026-10-29T10:01:00.000Z | case_brief | v2 | j2 | grounded_pass_rate | 0.21 |
+| 2026-10-29T10:01:00.000Z | case_brief | v2 | j2 | plain_language_pass_rate | 0.51 |
+| 2026-10-29T10:01:00.000Z | case_brief | v2 | j2 | rule_agreement_pass_rate | 1.0 |
+| 2026-10-29T10:01:00.000Z | letter_triage | v2 | j2 | conduct_recall | 1.0 |
+| 2026-10-29T10:01:00.000Z | letter_triage | v2 | j2 | ground_accuracy | 0.97 |
+| 2026-10-29T10:19:00.000Z | case_brief | v3 | j2 | grounded_pass_rate | 0.645 |
+| 2026-10-29T10:19:00.000Z | case_brief | v3 | j2 | plain_language_pass_rate | 0.24 |
+| 2026-10-29T10:19:00.000Z | case_brief | v3 | j2 | rule_agreement_pass_rate | 1.0 |
+| 2026-10-29T10:19:00.000Z | letter_triage | v2 | j2 | conduct_recall | 1.0 |
+| 2026-10-29T10:19:00.000Z | letter_triage | v2 | j2 | ground_accuracy | 0.97 |
+| 2026-10-29T10:36:00.000Z | case_brief | v3 | j2 | grounded_pass_rate | 0.601 |
+| 2026-10-29T10:36:00.000Z | case_brief | v3 | j2 | plain_language_pass_rate | 0.271 |
+| 2026-10-29T10:36:00.000Z | case_brief | v3 | j2 | rule_agreement_pass_rate | 0.94 |
+| 2026-10-29T10:36:00.000Z | letter_triage | v2 | j2 | conduct_recall | 1.0 |
+| 2026-10-29T10:36:00.000Z | letter_triage | v2 | j2 | ground_accuracy | 0.971 |
+| 2026-10-29T12:23:00.000Z | case_brief | v4 | j2 | grounded_pass_rate | 0.9 |
+| 2026-10-29T12:23:00.000Z | case_brief | v4 | j2 | plain_language_pass_rate | 0.86 |
+| 2026-10-29T12:23:00.000Z | case_brief | v4 | j2 | rule_agreement_pass_rate | 1.0 |
+| 2026-10-29T12:23:00.000Z | letter_triage | v2 | j2 | conduct_recall | 1.0 |
+| 2026-10-29T12:23:00.000Z | letter_triage | v2 | j2 | ground_accuracy | 0.971 |
+| 2026-10-29T13:31:00.000Z | case_brief | v4 | j2 | grounded_pass_rate | 0.88 |
+| 2026-10-29T13:31:00.000Z | case_brief | v4 | j2 | plain_language_pass_rate | 0.86 |
+| 2026-10-29T13:31:00.000Z | case_brief | v4 | j2 | rule_agreement_pass_rate | 1.0 |
+| 2026-10-29T13:31:00.000Z | letter_triage | v2 | j2 | conduct_recall | 1.0 |
+| 2026-10-29T13:31:00.000Z | letter_triage | v2 | j2 | ground_accuracy | 0.971 |
+```
+
+## 7. Orchestration: the cycle job's runs
+
+The cycle job is triggered by file arrival on the manifests folder. The run with trigger `FILE_ARRIVAL`
+started on its own when the August files were landed. Each task's result is shown for that run.
+
+```python
+runs = list(ctx.w.jobs.list_runs(job_id=int(ctx.jobs["ct_cycle"]), limit=8))
+rows = [[r.run_id, r.trigger.value if r.trigger else "", r.state.result_state.value if r.state.result_state else r.state.life_cycle_state.value,
+         dt.datetime.fromtimestamp(r.start_time / 1000, dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+         round(((r.end_time or 0) - r.start_time) / 60000, 1)] for r in runs]
+print(table(["run_id", "trigger", "result", "started", "minutes"], rows))
+fa = next((r for r in runs if r.trigger and r.trigger.value == "FILE_ARRIVAL"), runs[0])
+full = ctx.w.jobs.get_run(fa.run_id)
+print(f"\nrun {fa.run_id} tasks:")
+print(table(["task", "result", "seconds"], [[t.task_key, t.state.result_state.value if t.state.result_state else "", round(((t.end_time or 0) - (t.start_time or 0)) / 1000)] for t in full.tasks]))
+```
+
+Output:
+```
+| run_id | trigger | result | started | minutes |
+|---|---|---|---|---|
+| 922278263548078 | ONE_TIME | SUCCESS | 2026-10-30 11:02 UTC | 1.1 |
+| 442065786032196 | ONE_TIME | SUCCESS | 2026-10-30 10:14 UTC | 1.1 |
+| 176820566676320 | ONE_TIME | SUCCESS | 2026-10-29 13:27 UTC | 14.3 |
+| 199261380563882 | ONE_TIME | SUCCESS | 2026-10-29 12:36 UTC | 0.6 |
+| 77252095941105 | ONE_TIME | SUCCESS | 2026-10-29 12:20 UTC | 13.8 |
+| 366295467750773 | FILE_ARRIVAL | SUCCESS | 2026-10-29 10:28 UTC | 18.9 |
+| 593073173997565 | ONE_TIME | SUCCESS | 2026-10-29 10:15 UTC | 12.7 |
+| 476287392178085 | ONE_TIME | SUCCESS | 2026-10-29 09:54 UTC | 17.9 |
+| 224454188013264 | ONE_TIME | SUCCESS | 2026-10-29 09:34 UTC | 11.6 |
+| 1067591713200279 | ONE_TIME | SUCCESS | 2026-10-29 09:17 UTC | 14.2 |
+| 770130929147238 | FILE_ARRIVAL | FAILED | 2026-10-29 09:06 UTC | 0.0 |
+
+run 366295467750773 tasks:
+| task | result | seconds |
+|---|---|---|
+| govern | SUCCESS | 71 |
+| case_briefs | SUCCESS | 150 |
+| evaluate_ai | SUCCESS | 639 |
+| refresh_pipeline | SUCCESS | 274 |
+| sync_cases | SUCCESS | 47 |
+```
+
+## 8. Genie: one benchmark question through the Conversation API
+
+The Collections agent is asked a question from the benchmark. The output shows the SQL Genie wrote, the
+rows it returned, and the ground-truth SQL from `eval/benchmarks/collections.jsonl` run in the same minute.
+
+```python
+import time
+case = next(json.loads(l) for l in open("eval/benchmarks/collections.jsonl") if json.loads(l)["id"] == "COL-02")
+space = ctx.spaces["collections"]
+print("question:", case["question"])
+msg = ctx.w.genie.start_conversation_and_wait(space, case["question"])
+print("conversation", msg.conversation_id, "message", msg.message_id, "status", msg.status.value)
+for a in msg.attachments or []:
+    if a.text:
+        print("\nGenie said:", a.text.content)
+    if a.query:
+        print("\nGenie SQL:\n" + a.query.query.strip())
+        res = ctx.w.genie.get_message_attachment_query_result(space, msg.conversation_id, msg.message_id, a.attachment_id)
+        sr = res.statement_response
+        cols = [c.name for c in sr.manifest.schema.columns]
+        print("\nGenie result:")
+        print(table(cols, [list(r) for r in (sr.result.data_array or [])]))
+golden = "\n".join(case["golden_sql"]).replace("{FQ}", ctx.fq)
+print("\nground-truth SQL:\n" + golden)
+cols, rows = ctx.sql(golden)
+print("\nground-truth result:")
+print(table(cols, rows))
+```
+
+Output:
+```
+question: What was the microfinance delinquency percentage in Solapur in May 2026?
+conversation 01f1d6f69e0f1d52a15308f74557c0f1 message 01f1d6f69e3c18f3b2592e8ae18290f6 status COMPLETED
+
+Genie SQL:
+SELECT COUNT(*) AS `accounts`, SUM(CASE WHEN `d`.`dpd_days` > 0 THEN 1 ELSE 0 END) AS `delinquent_accounts`, ROUND(try_divide(100.0 * SUM(CASE WHEN `d`.`dpd_days` > 0 THEN 1 ELSE 0 END),COUNT(*)), 1) AS `delinquency_pct` FROM `serverless_lakebase_praneeth_catalog`.`control_tower_banking`.`delinquency_monthly` AS `d` JOIN `serverless_lakebase_praneeth_catalog`.`control_tower_banking`.`branch_master` AS `b` ON `d`.`branch_id` = `b`.`branch_id` WHERE `d`.`product_code` = 'MFI' AND `b`.`city` = 'Solapur' AND `d`.`snapshot_month` = DATE'2026-05-01'
+
+Genie result:
+| accounts | delinquent_accounts | delinquency_pct |
+|---|---|---|
+| 511 | 223 | 43.6 |
+
+Genie said: **43.6%** was the microfinance delinquency percentage in **Solapur** for **May 2026**. In that scope, **223** out of **511** accounts were delinquent, so just under half of the microfinance accounts in Solapur were past due.
+
+ground-truth SQL:
+SELECT ROUND(100.0 * SUM(CASE WHEN d.dpd_days > 0 THEN 1 ELSE 0 END) / COUNT(*), 1) AS delinquency_pct
+FROM serverless_lakebase_praneeth_catalog.control_tower_banking.delinquency_monthly d
+JOIN serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master b ON d.branch_id = b.branch_id
+WHERE d.product_code = 'MFI' AND b.city = 'Solapur' AND d.snapshot_month = DATE'2026-05-01'
+
+ground-truth result:
+| delinquency_pct |
+|---|
+| 43.6 |
+```
+
+## 9. Lakebase: the case queue, and a refused rewrite of history
+
+`collections_cases` is refreshed from gold each cycle, but the columns a person owns are never
+overwritten. `case_history` is written by a trigger and refuses UPDATE and DELETE, even from the owner.
+
+```python
+conn = ctx.pg()
+def pgq(sql, params=None):
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        cols = [d.name for d in cur.description]
+        return cols, [list(r) for r in cur.fetchall()]
+print(table(*pgq("SELECT on_worklist, count(*) AS cases FROM collections_cases GROUP BY 1 ORDER BY 1")))
+print(table(*pgq("SELECT count(*) AS history_rows, count(DISTINCT case_id) AS cases_with_history FROM case_history")))
+print(table(*pgq("SELECT case_id, loan_account_id, status, owner, left(notes, 60) AS notes, updated_at FROM collections_cases WHERE owner IS NOT NULL OR notes IS NOT NULL ORDER BY updated_at DESC LIMIT 3")))
+cols, rows = pgq("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'case_history' ORDER BY ordinal_position")
+col = rows[0][0]
+try:
+    with conn.cursor() as cur:
+        cur.execute(f'UPDATE case_history SET "{col}" = "{col}" WHERE ctid = (SELECT ctid FROM case_history LIMIT 1)')
+    print("\nUPDATE case_history succeeded (it should not have)")
+except Exception as e:
+    print("\nUPDATE case_history refused:", str(e).strip().splitlines()[0])
+```
+
+Output:
+```
+| on_worklist | cases |
+|---|---|
+| False | 589 |
+| True | 589 |
+| history_rows | cases_with_history |
+|---|---|
+| 1990 | 1178 |
+| case_id | loan_account_id | status | owner | notes | updated_at |
+|---|---|---|---|---|---|
+| 1312 | LN000666 | promise_to_pay | Collections officer (West) | Evidence test 2026-10-30 10:14: borrower asked for calls aft | 2026-10-30 10:14:45.252003+00:00 |
+
+UPDATE case_history refused: case_history is append-only: UPDATE refused
+```
+
+## 10. The approver-role control, as data
+
+`action_policies` names the role that may approve each action type. `approver_roles` is the directory.
+The app's `holds_required_role` refuses a principal that is not in the directory for that role, and the
+proposer can never approve their own action. The last query shows a persona service principal that holds no
+approval role, which is why its approval attempt would be refused.
+
+```python
+print(table(*pgq("SELECT action_type, requires_approval, approver_role FROM action_policies ORDER BY action_type")))
+print(table(*pgq("SELECT role, count(*) AS principals FROM approver_roles GROUP BY role ORDER BY role")))
+persona = ctx.vars["persona_collections_head"]
+print(table(*pgq("SELECT %s AS principal, count(*) AS approval_roles_held FROM approver_roles WHERE lower(principal) = lower(%s)", (persona, persona))))
+print(table(*pgq("SELECT id, action_type, status, requested_by, approved_by, rejected_by FROM actions ORDER BY id DESC LIMIT 5")))
+def _rows(sql, params=None):
+    cols, rows = pgq(sql, params)
+    return [dict(zip(cols, r)) for r in rows]
+import os, sys
+# The app reads its settings from the environment the bundle gives it; give it the same values here.
+os.environ.update({"CT_CATALOG": ctx.catalog, "CT_SCHEMA": ctx.schema, "DATABRICKS_WAREHOUSE_ID": ctx.warehouse,
+                   "LAKEBASE_ENDPOINT": ctx.endpoint, "LAKEBASE_SCHEMA": ctx.pg_schema,
+                   "COLLECTIONS_SPACE_ID": ctx.spaces["collections"], "GRIEVANCE_SPACE_ID": ctx.spaces["grievance"],
+                   "RM_SPACE_ID": ctx.spaces["rm"], "DATABRICKS_CONFIG_PROFILE": PROFILE})
+sys.path.insert(0, os.path.join(os.getcwd(), "app", "backend"))   # the app's modules import each other by bare name
+import action_plane.guardrails as g
+g.lakebase.query = _rows          # the app reads the same Lakebase tables; here through this notebook's connection
+me = ctx.w.current_user.me().user_name
+ok, why = g.holds_required_role({"action_type": "hold_incentive_payout"}, persona)
+print("\nholds_required_role(hold_incentive_payout, head of collections persona) ->", ok, "|", why)
+ok, why = g.authorise_approver({"action_type": "assign_recovery_agency", "requested_by": me}, me)
+print("authorise_approver(own action) ->", ok, "|", why)
+ok, why = g.holds_required_role({"action_type": "assign_recovery_agency"}, me)
+print("holds_required_role(assign_recovery_agency, administrator) ->", ok, "|", why)
+```
+
+Output:
+```
+| action_type | requires_approval | approver_role |
+|---|---|---|
+| assign_recovery_agency | True | Collections Head |
+| dispatch_customer_letter | True | Service Manager |
+| escalate_to_ombudsman | True | Principal Nodal Officer |
+| hold_incentive_payout | True | HR Compensation |
+| issue_provisional_credit | True | Disputes Manager |
+| offer_settlement | True | Credit Committee |
+| open_coaching_case | False |  |
+| record_ptp | False |  |
+| schedule_field_visit | True | Collections Manager |
+| waive_fee | True | Branch Manager |
+| role | principals |
+|---|---|
+| Branch Manager | 2 |
+| Collections Head | 1 |
+| Collections Manager | 2 |
+| Control Tower Administrator | 1 |
+| Credit Committee | 1 |
+| Disputes Manager | 1 |
+| HR Compensation | 1 |
+| Principal Nodal Officer | 1 |
+| Service Manager | 1 |
+| principal | approval_roles_held |
+|---|---|
+| 73bf8d86-1fc2-4f1f-b056-45d5b4efe648 | 0 |
+| id | action_type | status | requested_by | approved_by | rejected_by |
+|---|---|---|---|---|---|
+| 7 | assign_recovery_agency | proposed | builder@example.com |  |  |
+| 6 | assign_recovery_agency | proposed | builder@example.com |  |  |
+| 5 | assign_recovery_agency | proposed | builder@example.com |  |  |
+| 4 | assign_recovery_agency | proposed | builder@example.com |  |  |
+| 3 | assign_recovery_agency | proposed | builder@example.com |  |  |
+
+holds_required_role(hold_incentive_payout, head of collections persona) -> False | 73bf8d86-1fc2-4f1f-b056-45d5b4efe648 does not hold the 'HR Compensation' role required to approve hold_incentive_payout (holds no approval roles)
+authorise_approver(own action) -> False | separation of duties: you cannot approve an action you requested
+holds_required_role(assign_recovery_agency, administrator) -> True | builder@example.com holds the Collections Head role
+```
+
+## 11. Credit cost and cost to collect
+
+`executive_kpis` is a gold table that computes the two executive figures the other tables do not state:
+credit cost for the Chief Risk Officer and cost to collect for the Head of Collections. Both rest on an
+assumption written on the column comment (a 15 percent provision on NPA outstanding, and INR 25 per call
+or INR 350 per field visit), so the bank can replace it.
+
+```python
+cols, rows = ctx.sql(f'''
+SELECT report_month, round(sum(book_outstanding_inr) / 1e7, 1) AS book_crore, round(sum(npa_outstanding_inr) / 1e7, 2) AS npa_crore,
+       round(100 * sum(npa_outstanding_inr) / sum(book_outstanding_inr), 2) AS gnpa_pct,
+       round(sum(credit_cost_inr) / 1e5, 1) AS credit_cost_lakh,
+       sum(contact_attempts) AS contacts, round(sum(collection_cost_inr) / 1e5, 1) AS collection_cost_lakh,
+       round(sum(amount_collected_inr) / 1e7, 2) AS collected_crore,
+       round(100 * sum(collection_cost_inr) / sum(amount_collected_inr), 2) AS cost_to_collect_pct
+FROM {ctx.fq}.executive_kpis WHERE report_month >= DATE'2026-01-01' GROUP BY report_month ORDER BY report_month''')
+print(table(cols, rows))
+cols, rows = ctx.sql(f"SELECT region, gnpa_pct, credit_cost_inr, cost_to_collect_pct FROM {ctx.fq}.executive_kpis WHERE report_month = DATE'2026-08-01' ORDER BY region")
+print(table(cols, rows))
+cols, rows = ctx.sql(f"DESCRIBE TABLE {ctx.fq}.executive_kpis")
+print(table(cols, [r for r in rows if r[0] in ('provision_required_inr', 'collection_cost_inr')]))
+```
+
+Output:
+```
+| report_month | book_crore | npa_crore | gnpa_pct | credit_cost_lakh | contacts | collection_cost_lakh | collected_crore | cost_to_collect_pct |
+|---|---|---|---|---|---|---|---|---|
+| 2026-01-01 | 609.7 | 15.66 | 2.57 | 6.3 | 3433 | 2.7 | 2.08 | 1.29 |
+| 2026-02-01 | 609.7 | 16.41 | 2.69 | 11.2 | 3301 | 2.6 | 1.94 | 1.34 |
+| 2026-03-01 | 609.7 | 24.42 | 4.01 | 120.3 | 3500 | 2.7 | 2.17 | 1.27 |
+| 2026-04-01 | 609.7 | 23.7 | 3.89 | -10.9 | 3938 | 3.1 | 2.32 | 1.34 |
+| 2026-05-01 | 609.7 | 27.96 | 4.59 | 64.0 | 4401 | 3.6 | 2.53 | 1.42 |
+| 2026-06-01 | 609.7 | 24.2 | 3.97 | -56.4 | 4102 | 3.3 | 2.19 | 1.5 |
+| 2026-07-01 | 609.7 | 21.42 | 3.51 | -41.7 | 3810 | 3.0 | 2.48 | 1.2 |
+| 2026-08-01 | 609.7 | 17.98 | 2.95 | -51.7 | 3566 | 2.8 | 2.27 | 1.23 |
+| region | gnpa_pct | credit_cost_inr | cost_to_collect_pct |
+|---|---|---|---|
+| Central | 4.98 | -3446600.01 | 0.79 |
+| East | 2.09 | 433962.94 | 1.17 |
+| North | 1.45 | -1855976.69 | 1.32 |
+| South | 3.36 | -68999.17 | 1.1 |
+| West | 1.95 | -232885.35 | 2.07 |
+| col_name | data_type | comment |
+|---|---|---|
+| provision_required_inr | double | ASSUMPTION: 15 percent of NPA outstanding, the RBI minimum provision for a substandard asset. Replace with the bank's provisioning policy. |
+| collection_cost_inr | double | ASSUMPTION: INR 25 per call or message and INR 350 per field visit. Replace with the bank's agency rate card. |
+```
+
+## 12. The app, as the signed-in user
+
+`/api/health` on the deployed app. `obo_active` true means reads run as the caller, not the app.
+
+```python
+r = ctx.app("GET", "/api/health")
+print(r.status_code, json.dumps(r.json(), indent=1)[:600])
+r = ctx.app("GET", "/api/overview")
+k = r.json()["kpis"]
+print(r.status_code, {x: k[x] for x in ("as_of_month", "gnpa_pct", "roll_forward_pct", "delinquent_accounts")})
+```
+
+Output:
+```
+200 {
+ "status": "ok",
+ "service_identity": "f1c1fa6f-93ac-411a-a662-80f64388c21d",
+ "caller": "builder@example.com",
+ "obo_active": true,
+ "catalog": "serverless_lakebase_praneeth_catalog",
+ "schema": "control_tower_banking",
+ "warehouse_id": "4d39ac2e32b72a3a",
+ "genie_agents": {
+  "COLLECTIONS": true,
+  "GRIEVANCE": true,
+  "RM": true
+ },
+ "lakebase": "projects/genie-control-tower/branches/production/endpoints/primary/control_tower",
+ "data_is_synthetic": true,
+ "require_obo": true,
+ "turn_budget_seconds": 95,
+ "genie_quota": {
+  "used_in_window": 0,
+  "capacity": 4,
+  "window_secon
+200 {'as_of_month': '2026-08-01', 'gnpa_pct': '2.95', 'roll_forward_pct': '9.1', 'delinquent_accounts': '589'}
+```
