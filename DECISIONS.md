@@ -1,8 +1,6 @@
 # Decisions and trade-offs
 
-[YOUR WORDS] Each entry below was drafted with an AI pair engineer from decisions I made during the build. Rewrite each one in your own words before you submit.
-
-Each entry has the same shape. It says what we chose, what the other options were, and why.
+These are the decisions I made during the build. Each entry has the same shape. It says what the options were, what we chose, and why.
 
 ## 1. Start from the files each source system sends, not from clean tables
 

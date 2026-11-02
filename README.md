@@ -6,14 +6,14 @@ All data in this repository is synthetic. The bank, its customers, staff, agenci
 
 ## Who it is for
 
-[YOUR WORDS] The customer is a fictional Indian private-sector retail bank with about 6,000 loans across vehicle finance, microfinance, personal loans, cards, home loans and business loans. Two people buy this.
+The customer is a fictional Indian private-sector retail bank. It holds about 6,000 loans across vehicle finance, microfinance, personal loans, cards, home loans and business loans. Two people decide whether to buy this.
 
 - The Chief Risk Officer is the executive sponsor. The CRO is measured on gross NPA, credit cost, and conduct breaches and the penalties that follow them.
 - The Head of Collections and Recovery is the domain owner. This person is measured on roll-forward rate, cure rate, cost to collect, and contacts outside the hours the RBI permits.
 
 ## The problem and why now
 
-[YOUR WORDS]
+Two parts of the loan book came under stress this year, and the collections team has no single view of what to do about it. The RBI now holds the lender responsible for how its recovery agents behave, so a breach by an agency is the bank's breach.
 
 - Microfinance delinquency in Solapur rose from 11.7% in February 2026 to 43.6% in May. Commercial vehicle delinquency in Indore rose to 26.0% in the same month. The rest of the book stayed near 9%. Both have since eased, to 17.8% and 16.1% in August, but they are still about twice the rest of the book.
 - Collections effort followed the stress. In Solapur microfinance, contact attempts rose from 318 in February 2026 to 1,062 in May, more than three times as many, while each attempt collected about the same, INR 575 to 746.
@@ -41,7 +41,7 @@ The headline figures are kept in [evidence/HEADLINES.md](evidence/HEADLINES.md).
 
 ## Value
 
-[YOUR WORDS] These figures are illustrative. Each one names its assumption so the bank can replace it with its own number.
+These figures are illustrative. Each row states the assumption behind it, so the bank can put in its own number and see what changes.
 
 | Value driver | From the data | Assumption | Illustrative value |
 |---|---|---|---|
@@ -52,7 +52,7 @@ The headline figures are kept in [evidence/HEADLINES.md](evidence/HEADLINES.md).
 
 ## How it works
 
-[YOUR WORDS] One Lakeflow job runs every stage, in order, when a source system's month-end drop lands. The source files land in a Unity Catalog volume. A pipeline turns them into governed tables. An AI step reads the letters, and a score ranks the delinquent accounts. A second AI step explains each ranking. The cases go to Lakebase, where officers work them in the app. Genie agents answer questions as the signed-in user.
+One Lakeflow job runs every stage in order. It starts when a source system's month-end files land in a Unity Catalog volume. A pipeline turns the files into governed tables. Inside that pipeline, an AI step reads the customer letters and a points score ranks the delinquent accounts. A second AI step writes a short brief for each ranked account. The cases are then written to Lakebase, where collections officers work them in the app. Genie agents answer questions from either leader, and each answer is scoped to what the signed-in user may see.
 
 | Stage | What it does | Files |
 |---|---|---|
@@ -66,9 +66,9 @@ The headline figures are kept in [evidence/HEADLINES.md](evidence/HEADLINES.md).
 
 ## Decisions and trade-offs
 
-[YOUR WORDS] The full list, with the options considered, is in [DECISIONS.md](DECISIONS.md).
+These are the choices that shaped the build. The full list, with the options we considered for each, is in [DECISIONS.md](DECISIONS.md).
 
-1. We started from the files each source system sends, not from clean tables, because the pipeline has to do the real work and the answer key can check it.
+1. We started from the files each source system sends, not from clean tables, because the pipeline then has to conform, check and compute everything, and the answer key can confirm that it did.
 2. We declared row filters and masks in the gold table definitions, not with ALTER, because an ALTER on a pipeline table is lost on a full refresh.
 3. We computed everything from private core tables and governed only the published tables, so a policy never changes an answer.
 4. We stored entitlements as rows, so an access change is a data change a steward can audit.
@@ -85,7 +85,7 @@ The headline figures are kept in [evidence/HEADLINES.md](evidence/HEADLINES.md).
 
 ## How AI tools were used
 
-[YOUR WORDS] I built this with Claude Code as a pair engineer, with the Databricks agent skills loaded for pipelines, MLflow evaluation and Lakebase. I made the decisions on the use case, the personas, the trigger and the workspace. The AI wrote most of the code and ran the commands, and I reviewed each step. [BUILD_LOG.md](BUILD_LOG.md) records every attempt, failure and fix.
+I built this with Claude Code as a pair engineer, with the Databricks agent skills loaded for pipelines, MLflow evaluation and Lakebase. I chose the use case, the two personas, the file-arrival trigger and the workspace. The AI wrote most of the code and ran the commands. I reviewed each step and sent the result through two rounds of review by a second AI tool, Codex, before merging. [BUILD_LOG.md](BUILD_LOG.md) records every attempt, failure and fix, including both review rounds.
 
 These practices kept the AI honest.
 

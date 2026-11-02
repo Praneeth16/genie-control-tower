@@ -1,6 +1,6 @@
 # Role-play script, demo sequence and answer bank
 
-[YOUR WORDS] This is a draft. Read it aloud twice and rewrite anything you would not naturally say. The role-play has two people in one session: the Chief Risk Officer, who funds it, and the Head of Collections, who must live with it. Present for about 17 minutes and leave the rest for questions.
+The role-play has two people in one session. The Chief Risk Officer funds the work. The Head of Collections has to use it every day. Present for about 17 minutes and leave the rest for questions. The quoted lines are what to say. Read them aloud before the session and change any line that does not sound like you.
 
 ## Set the stage (2 minutes)
 
