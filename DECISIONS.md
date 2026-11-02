@@ -92,3 +92,8 @@ These are the decisions I made during the build. Each entry has the same shape. 
 - Choice. SELECT on each governed table, granted by the cycle job after the pipeline has created the tables.
 - Why. The schema also holds bronze, silver and quarantine tables with raw identifiers and no policy. A schema-wide grant would let a persona go around every row filter and mask.
 
+## 16. Write the assumption on the column, not in the slide
+
+- Options. Compute credit cost and cost to collect in the deck from stated assumptions, or compute them in a gold table and put the assumption in the column comment.
+- Choice. A gold table, `executive_kpis`, with the assumption in the comment of the column it affects.
+- Why. The two figures the executives are measured on now come from the same governed pipeline as every other number, and anyone who queries the column sees the assumption next to the value. A number in a slide can be quoted without its assumption. A column comment travels with the number.

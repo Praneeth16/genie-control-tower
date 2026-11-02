@@ -223,6 +223,49 @@ AS SELECT trunc(received_date, 'MM') AS report_month, branch_id, region, rbi_cat
 FROM core_complaints
 GROUP BY ALL;
 
+-- ============================================================ executive KPIs
+-- The two figures the CRO and the Head of Collections are measured on that the other gold tables do not
+-- state directly: credit cost and cost to collect. Both need an assumption the bank must replace, and the
+-- assumption is written on the column so nobody mistakes the figure for a fact.
+CREATE OR REFRESH MATERIALIZED VIEW executive_kpis (
+  report_month           DATE   COMMENT 'Month end, first day of month.',
+  region                 STRING COMMENT 'Region. Sum the regions for the bank total.',
+  book_outstanding_inr   DOUBLE COMMENT 'Outstanding principal of every loan in the month-end snapshot.',
+  npa_outstanding_inr    DOUBLE COMMENT 'Outstanding principal of loans more than 90 days past due.',
+  gnpa_pct               DOUBLE COMMENT 'Gross NPA: npa_outstanding_inr as a percentage of book_outstanding_inr.',
+  provision_required_inr DOUBLE COMMENT 'ASSUMPTION: 15 percent of NPA outstanding, the RBI minimum provision for a substandard asset. Replace with the bank''s provisioning policy.',
+  credit_cost_inr        DOUBLE COMMENT 'Credit cost for the month: the change in provision_required_inr from the previous month. Positive means new provisions were needed.',
+  contact_attempts       BIGINT COMMENT 'Collections contact attempts made in the month, every channel.',
+  collection_cost_inr    DOUBLE COMMENT 'ASSUMPTION: INR 25 per call or message and INR 350 per field visit. Replace with the bank''s agency rate card.',
+  amount_collected_inr   DOUBLE COMMENT 'Amount collected through those contacts.',
+  cost_to_collect_pct    DOUBLE COMMENT 'Cost to collect: collection_cost_inr as a percentage of amount_collected_inr.'
+)
+WITH ROW FILTER ${catalog}.${schema}.region_visible ON (region)
+COMMENT 'Monthly executive KPIs by region: gross NPA and credit cost for the Chief Risk Officer, cost to collect for the Head of Collections. The two cost figures rest on stated assumptions written on their columns.'
+AS WITH book AS (
+  SELECT snapshot_month AS report_month, region,
+         sum(outstanding_principal) AS book_outstanding_inr,
+         sum(CASE WHEN is_npa THEN outstanding_principal ELSE 0 END) AS npa_outstanding_inr
+  FROM core_delinquency GROUP BY ALL
+), effort AS (
+  SELECT trunc(activity_date, 'MM') AS report_month, region,
+         count(*) AS contact_attempts,
+         CAST(sum(CASE WHEN channel = 'Field Visit' THEN 350 ELSE 25 END) AS DOUBLE) AS collection_cost_inr,
+         sum(amount_collected) AS amount_collected_inr
+  FROM core_collections_activity GROUP BY ALL
+)
+SELECT b.report_month, b.region, b.book_outstanding_inr, b.npa_outstanding_inr,
+       round(100 * b.npa_outstanding_inr / b.book_outstanding_inr, 2) AS gnpa_pct,
+       round(0.15 * b.npa_outstanding_inr, 2) AS provision_required_inr,
+       round(0.15 * (b.npa_outstanding_inr
+                     - lag(b.npa_outstanding_inr) OVER (PARTITION BY b.region ORDER BY b.report_month)), 2) AS credit_cost_inr,
+       coalesce(e.contact_attempts, 0) AS contact_attempts,
+       coalesce(e.collection_cost_inr, 0) AS collection_cost_inr,
+       coalesce(e.amount_collected_inr, 0) AS amount_collected_inr,
+       round(100 * e.collection_cost_inr / nullif(e.amount_collected_inr, 0), 2) AS cost_to_collect_pct
+FROM book b
+LEFT JOIN effort e ON e.report_month = b.report_month AND e.region = b.region;
+
 -- ============================================================ RM performance and incentives
 CREATE OR REFRESH MATERIALIZED VIEW relationship_managers (
   rm_id           STRING  COMMENT 'Relationship manager identifier, primary key. Format RMnnnn.',

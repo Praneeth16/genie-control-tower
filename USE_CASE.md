@@ -11,14 +11,14 @@ The customer is a fictional Indian private-sector retail bank with about 6,000 l
 The executive sponsor is the Chief Risk Officer. The CRO is measured on these things:
 
 - Gross NPA, the share of the loan book more than 90 days past due.
-- Credit cost.
+- Credit cost. Computed in the gold table `executive_kpis` as the month-on-month change in the provision required on NPA outstanding, at an assumed 15 percent. March 2026 needed INR 120 lakh of new provisions; August released INR 51.7 lakh.
 - Conduct breaches, and the regulatory penalties and reputation damage that follow them.
 
 The domain owner is the Head of Collections and Recovery. The Head of Collections is measured on these things:
 
 - Roll-forward rate, the share of accounts that move into a worse ageing bucket each month.
 - Cure rate, the share of delinquent accounts that return to current.
-- Cost to collect.
+- Cost to collect. Computed in `executive_kpis` as collection cost over amount collected, at an assumed INR 25 per call and INR 350 per field visit. 1.23% of the amount collected in August 2026, against 1.5% in June.
 - Contacts outside the hours the RBI permits.
 
 ## The problem
