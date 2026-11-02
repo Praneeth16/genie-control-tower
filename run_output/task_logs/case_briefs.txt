@@ -1,0 +1,7 @@
+# stdout of the case_briefs task, run 176820566676320
+
+Fetched 2026-11-02 from the Jobs API (`databricks jobs get-run` and `databricks jobs get-run-output`, profile redacted). Not edited except that the builder's email is replaced with builder@example.com.
+
+ai/case_brief.sql: 2 statements
+  [1/2] CREATE TABLE IF NOT EXISTS serverless_lakebase_praneeth_catalog.control_tower_banking.collections_case_brief (
+  [2/2] MERGE INTO serverless_lakebase_praneeth_catalog.control_tower_banking.collections_case_brief t

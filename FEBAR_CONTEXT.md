@@ -12,7 +12,7 @@ This is my FE Bar submission. It is a working prototype for an Indian private-se
 ## Rules
 
 - One connected journey from raw synthetic data. The stages are Lakeflow ingest, Unity Catalog governance, Lakebase serving, AI inside the flow, Genie agents, and a Databricks App. Each stage uses the output of the one before it.
-- The evaluator reads text only. Every stage needs committed text evidence from a real run, written by `tools/generate_evidence.py`.
+- The evaluator reads text only. Every stage needs committed text evidence from a real run, written by `tools/generate_evidence.py` into `evidence/` and by `tools/verify_run.py` into `run_output/`. The first scoring did not see `evidence/` or `data/`, so proof of execution must also appear in the README itself and in a folder not named `data` or `evidence`.
 - The repo is public.
 - Synthetic data only. No customer names, real institutions, people's names, or internal system names, in code, data, docs, commit messages or the deck.
 - My own work. No Solution Builder output and no one else's build.

@@ -1,5 +1,7 @@
 # Evidence
 
+Raw job logs and an executed notebook with saved outputs are in [run_output/](../run_output/README.md). This folder is the fuller pack, one file per stage.
+
 Each file below was generated from the live workspace by `tools/generate_evidence.py` after the final run, except the answer key, which the data generator writes. Each generated file starts with the time it was generated. No result in these files was typed by hand.
 
 | File | What it shows |

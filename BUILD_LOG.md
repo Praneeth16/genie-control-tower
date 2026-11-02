@@ -124,3 +124,16 @@ I asked Codex to check the fixes. It confirmed nine of the twelve and found new 
 - A request without a user token returned HTTP 500. It now returns 403.
 - An action whose subject did not resolve to a region skipped the region check. It is now refused.
 
+
+## Round 3: the scorer could not see that it ran (2 November 2026)
+
+The first FE Bar scoring returned Below on the Build and AI Mindset domain for one reason: no readable run output was found. It also said the data-generation logic was not visible. Both exist in the repository, in `evidence/` and `data/`. The upload tool reads source files from a local folder and skips some folders, and the most likely explanation is that it skipped folders named `data` and `evidence`. I could not confirm that, so the fix does not depend on folder names.
+
+- Added `run_output/`, a folder of raw run output fetched from the Jobs and Pipelines APIs: two cycle job runs with every task's result, the standard output of the evaluation, sync, brief, governance and grant tasks, and the pipeline's update history. The builder's email and the workspace hostname are replaced with placeholders.
+- Added `tools/verify_run.py`, which executes eleven cells against the deployed bundle and saves them as `run_output/verify_run.ipynb` with outputs, and as plain text. The cells query the event log, the reconciliation table, the quarantine counts, the worklist, the evaluation history, the job runs, Genie through the Conversation API against ground-truth SQL, Lakebase including a refused UPDATE on the history, the approver-role check through the app's own `holds_required_role`, and the app's health route.
+- Added a section to the README, "Proof that it ran", that quotes the run output directly, so a reader who opens only the README sees it.
+- Added `docs/DATA_GENERATION.md`, which shows the generator code for the two stress curves, the conduct patterns, the pressure-driven complaints, the letters and the twelve planted defects, with the answer-key counts.
+
+Two things from the feedback's "level up" list were already true and are now visible. The evaluation runs in every cycle and writes a row per metric to `ai_eval_summary`, so the notebook shows it as a history, not a one-off. The approver-role refusal for a principal without the role is now shown with the app's own function, next to the separation-of-duties refusal.
+
+The notebook builder failed four times before it ran clean: a syntax error in a one-line shim, a `\n` that the cell string turned into a real newline, the app package needing `app/backend` on the import path, and the app config needing its environment variables before import. Each is fixed in the committed script.

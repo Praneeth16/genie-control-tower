@@ -1,0 +1,20 @@
+# Pipeline updates (pipeline control_tower, id 9fa6adcc-8175-487f-ad73-3f260e63a359)
+
+Fetched 2026-11-02 with `databricks pipelines list-updates`. JOB_TASK means the cycle job started the update.
+
+update_id                             state      cause     created (UTC)
+08a95391-0462-4432-8a46-310621add421  COMPLETED  JOB_TASK  2026-10-29 13:27
+7dd133ab-2ff7-47fe-a3f5-46b56a9a1095  COMPLETED  API_CALL  2026-10-29 12:22
+84611eaa-8954-404b-a1ff-87e248ddf28a  COMPLETED  JOB_TASK  2026-10-29 10:28   <- started by the FILE_ARRIVAL run 366295467750773
+0fa48c1b-e9d9-4ab1-874f-ccd92711f507  COMPLETED  JOB_TASK  2026-10-29 09:54
+5dcfd5a8-2987-45f6-b178-a17b81be485a  COMPLETED  API_CALL  2026-10-29 09:50
+
+Update 84611eaa progress events, from `databricks pipelines list-pipeline-events`:
+2026-10-29T10:28:11.169Z Update 84611e started by JOB_TASK.
+2026-10-29T10:28:14.259Z Update 84611e is WAITING_FOR_RESOURCES.
+2026-10-29T10:28:25.333Z Update 84611e is INITIALIZING.
+2026-10-29T10:28:58.871Z Update 84611e is SETTING_UP_TABLES.
+2026-10-29T10:29:06.401Z Update 84611e is RUNNING.
+2026-10-29T10:32:31.501Z Update 84611e is COMPLETED.
+
+Per-expectation pass and fail counts are in run_output/verify_run.ipynb (cell 2) and evidence/01_pipeline_run.md, read from event_log().

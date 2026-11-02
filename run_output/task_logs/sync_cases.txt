@@ -1,0 +1,6 @@
+# stdout of the sync_cases task, run 176820566676320
+
+Fetched 2026-11-02 from the Jobs API (`databricks jobs get-run` and `databricks jobs get-run-output`, profile redacted). Not edited except that the builder's email is replaced with builder@example.com.
+
+{"published_case_status_rows": 1178}
+{"gold_rows": 589, "cases_before": 1178, "cases_after": 1178, "on_worklist": 589, "left_worklist": 0, "cases_worked_by_people": 1}
