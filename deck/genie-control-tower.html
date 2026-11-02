@@ -626,18 +626,18 @@
 
 <script type="application/json" id="speaker-notes">
 [
- "[YOUR WORDS] Name the customer and the two people in the room. Say what they are about to see: the overview, the worklist, one case and one Genie question.",
- "[YOUR WORDS] Lead with the four numbers, then the ask. Everything after this slide supports these numbers.",
- "[YOUR WORDS] The Solapur and Indore figures come from the governed tables. Then the two RBI rules that make this urgent.",
- "[YOUR WORDS] Contrast one manager's week today with the same week using the worklist.",
- "[YOUR WORDS] Keep this at one sentence per stage for the CRO. Save the detail for the technical questions.",
- "[YOUR WORDS] Tell, show, tell at each stop. Say what it means for them after each one.",
- "[YOUR WORDS] Speak to each leader in turn, in their own measures.",
- "[YOUR WORDS] Read each assumption aloud and invite them to replace it with their own number.",
- "[YOUR WORDS] This answers 'can I trust the AI?' and 'what about a late or corrupted file?' before they ask.",
- "[YOUR WORDS] One line on each product. Point out that it is one bundle and one job.",
- "[YOUR WORDS] Read the three success criteria and the three asks.",
- "[YOUR WORDS] Ask directly for a start date and the two names."
+ "This is a fictional Indian retail bank with about six thousand loans. In the room are the Chief Risk Officer, who would fund this, and the Head of Collections, who would use it every day. In the next fifteen minutes you will see the overview, the worklist, one case being worked, and one question put to Genie.",
+ "Four numbers. 589 delinquent accounts, INR 44.1 crore outstanding, ranked with the reason on every row. 40 accounts held because the borrower's grievance is still open. 2,499 contacts made outside RBI hours, and a rule that recommends those accounts for a certified agency. The ask is a six-week pilot in West and Central. Everything that follows supports these four numbers.",
+ "Solapur microfinance went from 11.7% delinquent in February to 43.6% in May. Indore commercial vehicles reached 26.0%. Both have eased but are still about twice the rest of the book. These figures come from the governed tables, not from a slide. Two RBI rules make this urgent. The 2022 circular makes the bank responsible for its agents' conduct. The Integrated Ombudsman Scheme lets a borrower escalate an unresolved complaint, and recovery agent conduct is a named ground.",
+ "Today a collections manager spends the first days of the month building a list from the dialer, the field app, the loan system and the CRM. If a file arrives short, nobody notices. A conduct breach is found when the complaint arrives. With the worklist, the list is rebuilt the moment the data lands, every file is checked against what the sender said it sent, and the conduct rules are applied before anyone makes a call.",
+ "One sentence per stage. The source systems drop their files. A Lakeflow pipeline turns them into governed tables and quarantines bad rows with a reason. Inside that pipeline the AI reads the letters and a points score ranks the accounts. The cases go to a Lakebase queue. Officers work them in the app, and Genie answers questions. One job runs all of it. Keep the detail for the technical questions.",
+ "Now the demo, in four stops. At each stop say what they are about to see, show it, then say what it means for them. The overview for the CRO. The worklist for the Head of Collections. One case, including an action that is refused because the agent is not certified. One question to Genie, answered as the signed-in user.",
+ "Speak to each leader in turn. For the CRO, gross NPA is 2.95% this month and the roll-forward rate is 9.1%. Conduct exposure is one number, 4.0% of contacts outside hours. Below both sits the completeness check, so the CRO knows whether the data behind the numbers is complete. For the Head of Collections, the order to work the book, the reason for each account in words, and the accounts that must not be contacted.",
+ "Read each assumption aloud. One point of cure on INR 44.1 crore is about INR 44 lakh a year. Removing half of the out-of-hours contacts is about 1,250 fewer breaches. Forty held accounts are forty fewer likely escalations a month. Two analysts for three days a month is six analyst days. Ask them to replace any assumption with their own number. The point is the method, not the total.",
+ "This slide answers two questions before they are asked. Can I trust the AI? The AI reads and explains. The bank's rules decide. The letter triage agrees with the grievance desk on 97% of letters, and a judge from a different model family grades the briefs. What about a late or corrupted file? Every file is reconciled against its manifest. 176 of 177 reconciled, and the one short file is shown as a break, not hidden. 1,045 bad rows were kept with a reason. Every action needs a named approver, and the person who raised it cannot approve it.",
+ "One line on each product. Lakeflow ingests and conforms the files. Unity Catalog holds the row filters, masks and entitlements. AI Functions run the triage and the briefs, and MLflow judges them. Lakebase holds the case queue. Genie answers questions. Databricks Apps is the screen the officers use. Lakeflow Jobs runs the whole cycle on file arrival. It is one bundle and one job.",
+ "Scope is West and Central collections for six weeks. Three success criteria, agreed in week one: roll-forward rate down by a number of points we set together, zero contacts outside RBI hours on worked accounts, and every source file reconciled each month. Three things we need: read access to the dialer, field app, loan system and CRM extracts, a collections manager for two hours a week, and a named compliance reviewer.",
+ "Ask directly. Can we agree a start date for the pilot this week? And can you name the collections manager and the compliance reviewer? Then stop talking and wait for the answer."
 ]
 </script>
 

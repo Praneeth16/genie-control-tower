@@ -1,6 +1,6 @@
 # Deck outline
 
-[YOUR WORDS] The slides are built from this outline in `deck/genie-control-tower.html` and exported to `deck/genie-control-tower.pdf`. Change the outline and the slides together. Each title is the takeaway. Every number comes from `evidence/HEADLINES.md`. The slides use the Databricks editorial deck template and brand assets from the genie-design repository (databricks-field-eng/genie-design).
+The slides in `deck/genie-control-tower.html` follow this outline, and `deck/genie-control-tower.pdf` is exported from them. If you change one, change the other. Each slide title states the point of the slide. Every number comes from `evidence/HEADLINES.md`. The slides use the Databricks editorial deck template and brand assets from the genie-design repository (databricks-field-eng/genie-design). The speaker notes are in the HTML file, in the block with the id `speaker-notes`.
 
 1. Title. Work the right 589 accounts first, and never contact a borrower you must not contact.
 

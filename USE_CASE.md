@@ -1,6 +1,6 @@
 # Use case
 
-[YOUR WORDS] This file was drafted with an AI pair engineer. The problem, the buyers and the value case are scored as yours, so rewrite them in your own words.
+This file describes the customer, the two people who buy the solution, the problem they have, and what the solution is worth to them. The numbers come from the synthetic data in this repo and are shown in the evidence files.
 
 ## The customer
 

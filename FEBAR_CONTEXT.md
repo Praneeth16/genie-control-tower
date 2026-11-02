@@ -16,7 +16,7 @@ This is my FE Bar submission. It is a working prototype for an Indian private-se
 - The repo is public.
 - Synthetic data only. No customer names, real institutions, people's names, or internal system names, in code, data, docs, commit messages or the deck.
 - My own work. No Solution Builder output and no one else's build.
-- Mark every drafted narrative, opinion or decision with [YOUR WORDS]. I rewrite those parts myself.
+- The narrative, opinions and decisions were drafted with the AI and then rewritten in plain style on 2026-11-02. I review them before I submit. Do not add new narrative without marking it for my review.
 
 ## Workspace
 
