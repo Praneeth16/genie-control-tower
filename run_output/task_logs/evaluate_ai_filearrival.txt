@@ -1,0 +1,155 @@
+# stdout of the evaluate_ai task, run 366295467750773 (the FILE_ARRIVAL run, 2026-10-29 10:28 UTC)
+
+Fetched 2026-11-02 from the Jobs API (`databricks jobs get-run` and `databricks jobs get-run-output`, profile redacted). Not edited except that the builder's email is replaced with builder@example.com.
+
+/databricks/python/lib/python3.12/site-packages/pydantic/_internal/_fields.py:161: UserWarning: Field "model_name" has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+If you are using MLflow Tracing, you can migrate your traces to Unity Catalog for unlimited storage, fine-grained access controls, and queryability from notebooks, SQL, and dashboards. Learn more: https://docs.databricks.com/aws/en/mlflow3/genai/tracing/migrate-traces-to-uc
+
+
+🏃 View run ai-eval-20261029-1036 at: https://workspace.example.com/ml/experiments/1300007936624440/runs/04533ad423384d41815acd2403ccffd9
+🧪 View experiment at: https://workspace.example.com/ml/experiments/1300007936624440
+[
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "letter_triage",
+  "prompt_version": "v2",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "letters",
+  "value": 713.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "letter_triage",
+  "prompt_version": "v2",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "errors",
+  "value": 0.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "letter_triage",
+  "prompt_version": "v2",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "ground_accuracy",
+  "value": 0.97054698457223
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "letter_triage",
+  "prompt_version": "v2",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "conduct_recall",
+  "value": 1.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "letter_triage",
+  "prompt_version": "v2",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "conduct_precision",
+  "value": 1.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "briefs",
+  "value": 218.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "errors",
+  "value": 0.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "grounded_pass_rate",
+  "value": 0.6009174311926605
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "conduct_compliant_pass_rate",
+  "value": 1.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "actionable_pass_rate",
+  "value": 1.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "plain_language_pass_rate",
+  "value": 0.2706422018348624
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "rule_agreement_pass_rate",
+  "value": 0.9403669724770642
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "numbers_grounded_pass_rate",
+  "value": 1.0
+ },
+ {
+  "eval_run_id": "972afedc-6a13-4b7d-939a-49ceb623a8b7",
+  "evaluated_at": "2026-10-29 10:36:48.089729+00:00",
+  "component": "case_brief",
+  "prompt_version": "v3",
+  "judge_version": "j2",
+  "model": "databricks-claude-sonnet-4-6",
+  "metric": "within_60_words_pass_rate",
+  "value": 0.26146788990825687
+ }
+]

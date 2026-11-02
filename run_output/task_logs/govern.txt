@@ -1,0 +1,47 @@
+# stdout of the govern task, run 176820566676320
+
+Fetched 2026-11-02 from the Jobs API (`databricks jobs get-run` and `databricks jobs get-run-output`, profile redacted). Not edited except that the builder's email is replaced with builder@example.com.
+
+governance/action_functions.sql: 6 statements
+  [1/6] CREATE OR REPLACE FUNCTION serverless_lakebase_praneeth_catalog.control_tower_banking.agent_conduct_status(age
+  [2/6] CREATE OR REPLACE FUNCTION serverless_lakebase_praneeth_catalog.control_tower_banking.has_open_grievance(custo
+  [3/6] CREATE OR REPLACE FUNCTION serverless_lakebase_praneeth_catalog.control_tower_banking.loan_customer_id(loan_ac
+  [4/6] CREATE OR REPLACE FUNCTION serverless_lakebase_praneeth_catalog.control_tower_banking.contacts_on_date(loan_ac
+  [5/6] CREATE OR REPLACE FUNCTION serverless_lakebase_praneeth_catalog.control_tower_banking.account_dpd_days(loan_ac
+  [6/6] CREATE OR REPLACE FUNCTION serverless_lakebase_praneeth_catalog.control_tower_banking.guardrail_visibility()
+governance/tags.sql: 35 statements
+  [1/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.loan_accounts         ALTER
+  [2/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaints            ALTER
+  [3/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaints            ALTER
+  [4/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes          ALTER
+  [5/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.chargebacks           ALTER
+  [6/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio    ALTER
+  [7/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.product_holdings      ALTER
+  [8/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.recovery_agents       ALTER
+  [9/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers ALTER
+  [10/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.delinquency_monthly ALTER C
+  [11/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement      ALTER C
+  [12/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.delinquency_monthly   SET T
+  [13/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.loan_accounts         SET T
+  [14/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.collections_activity  SET T
+  [15/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.recovery_agents       SET T
+  [16/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.repayment_schedule    SET T
+  [17/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaints            SET T
+  [18/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.sla_tracker           SET T
+  [19/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_categories  SET T
+  [20/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.upi_disputes          SET T
+  [21/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.chargebacks           SET T
+  [22/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.rm_achievement        SET T
+  [23/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.rm_targets            SET T
+  [24/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.relationship_managers SET T
+  [25/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.incentive_slabs       SET T
+  [26/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.customer_portfolio    SET T
+  [27/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.product_holdings      SET T
+  [28/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.branch_master         SET T
+  [29/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.product_master        SET T
+  [30/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_documents   ALTER
+  [31/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.collections_priority  ALTER
+  [32/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_ai_triage   ALTER
+  [33/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_documents   SET T
+  [34/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.collections_priority  SET T
+  [35/35] ALTER MATERIALIZED VIEW serverless_lakebase_praneeth_catalog.control_tower_banking.complaint_ai_triage   SET T

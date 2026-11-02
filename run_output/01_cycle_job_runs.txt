@@ -1,0 +1,39 @@
+# Cycle job runs (job ct_cycle, id 112274750105468)
+
+Fetched 2026-11-02 from the Jobs API (`databricks jobs get-run` and `databricks jobs get-run-output`, profile redacted). Not edited except that the builder's email is replaced with builder@example.com.
+
+
+## Run 366295467750773
+
+trigger          FILE_ARRIVAL
+life_cycle_state TERMINATED
+result_state     SUCCESS
+start_time       2026-10-29 10:28:09 UTC
+end_time         2026-10-29 10:47:04 UTC
+run_page_url     https://workspace.example.com/?o=7474654904882204#job/112274750105468/run/366295467750773
+
+task                 run_id             result    start                    seconds
+govern               314989433124396    SUCCESS   2026-10-29 10:32:43 UTC  70
+case_briefs          775573974317880    SUCCESS   2026-10-29 10:33:54 UTC  149
+evaluate_ai          737835527774210    SUCCESS   2026-10-29 10:36:25 UTC  638
+refresh_pipeline     18099347916587     SUCCESS   2026-10-29 10:28:09 UTC  274
+sync_cases           721643670407526    SUCCESS   2026-10-29 10:36:25 UTC  46
+
+This run was started by the file-arrival trigger when tools/land_next_period.py copied the August files and their manifest into the landing volume. Nobody clicked run.
+
+## Run 176820566676320
+
+trigger          ONE_TIME
+life_cycle_state TERMINATED
+result_state     SUCCESS
+start_time       2026-10-29 13:27:06 UTC
+end_time         2026-10-29 13:41:26 UTC
+run_page_url     https://workspace.example.com/?o=7474654904882204#job/112274750105468/run/176820566676320
+
+task                 run_id             result    start                    seconds
+govern               246824468866886    SUCCESS   2026-10-29 13:29:49 UTC  67
+case_briefs          797608970571865    SUCCESS   2026-10-29 13:30:57 UTC  31
+evaluate_ai          714550313304993    SUCCESS   2026-10-29 13:31:29 UTC  595
+refresh_pipeline     304187135156476    SUCCESS   2026-10-29 13:27:06 UTC  163
+sync_cases           411216594409278    SUCCESS   2026-10-29 13:31:30 UTC  37
+grant_personas       311602693333939    SUCCESS   2026-10-29 13:32:07 UTC  71
